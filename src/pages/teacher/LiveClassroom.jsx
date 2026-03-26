@@ -10,8 +10,7 @@ import {
   FiTrash2, FiSlash, FiX, FiVolume2, FiVolumeX, FiMaximize,
   FiDownload, FiAlertCircle
 } from 'react-icons/fi';
-import { rtdb, db, storage } from '../../firebase/config';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { rtdb, db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
 import { uploadBlobToDrive, signInToDrive } from '../../firebase/googleDrive';
@@ -200,27 +199,19 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
 
   const saveRecording = async (blob) => {
     const fileName = `recording_${courseId}_${sessionId}_${Date.now()}.webm`;
-    toast('Saving recording...', 'info');
+    toast('Saving recording to Google Drive...', 'info');
     try {
-      let recordingUrl;
-      try {
-        await signInToDrive();
-        const result = await uploadBlobToDrive(blob, fileName);
-        recordingUrl = result.embedLink;
-        toast('Recording saved to Google Drive!', 'success');
-      } catch {
-        // Fallback Firebase Storage
-        const sRef = storageRef(storage, `recordings/${courseId}/${fileName}`);
-        await uploadBytesResumable(sRef, blob);
-        recordingUrl = await getDownloadURL(sRef);
-        toast('Recording saved!', 'success');
-      }
-      // Save to Firestore
+      // Save to Google Drive (same account as Firebase)
+      const result = await uploadBlobToDrive(blob, fileName);
+      const recordingUrl = result.embedLink;
+
+      // Save URL to Firestore so students can watch it later
       await updateDoc(doc(db, `courses/${courseId}/liveSessions`, sessionId), {
         recordingUrl,
         recordingName: fileName,
         hasRecording: true
       });
+      toast('Recording saved to Google Drive! ✅', 'success');
     } catch (err) {
       toast('Failed to save recording: ' + err.message, 'error');
     }

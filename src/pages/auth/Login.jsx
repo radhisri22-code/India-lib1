@@ -1,46 +1,26 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FiMail, FiLock, FiLogIn } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
+import { FiUserCheck, FiUser } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
 import './Auth.css';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('student');
   const [loading, setLoading] = useState(false);
-  const { login, loginWithGoogle } = useAuth();
+  const { loginWithGoogle } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await login(email, password);
-      toast('Welcome back!', 'success');
-      navigate('/');
-    } catch (err) {
-      const msg = err.code === 'auth/invalid-credential'
-        ? 'Invalid email or password'
-        : err.code === 'auth/user-not-found'
-        ? 'No account found with this email'
-        : 'Login failed. Please try again.';
-      toast(msg, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await loginWithGoogle();
-      toast('Logged in with Google!', 'success');
+      await loginWithGoogle(role);
+      toast('Welcome to EduLive!', 'success');
       navigate('/');
-    } catch {
-      toast('Google login failed', 'error');
+    } catch (err) {
+      toast('Login failed. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -56,68 +36,70 @@ const Login = () => {
         </div>
 
         <div className="auth-card card">
-          <h2 className="auth-title">Welcome Back</h2>
-          <p className="auth-subtitle">Sign in to continue learning</p>
+          <h2 className="auth-title">Welcome to EduLive</h2>
+          <p className="auth-subtitle">Sign in with your Google account to continue</p>
 
-          <form onSubmit={handleSubmit} className="auth-form">
-            <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <div className="input-icon-wrap">
-                <FiMail className="input-icon" size={16} />
-                <input
-                  type="email"
-                  className="form-input input-with-icon"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <div className="input-icon-wrap">
-                <FiLock className="input-icon" size={16} />
-                <input
-                  type="password"
-                  className="form-input input-with-icon"
-                  placeholder="Your password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <button type="submit" className="btn btn-primary w-full btn-lg" disabled={loading}>
-              {loading ? <span className="spinner" /> : <><FiLogIn size={16} /> Sign In</>}
+          {/* Role Selector */}
+          <div className="role-selector">
+            <button
+              type="button"
+              className={`role-btn ${role === 'student' ? 'active' : ''}`}
+              onClick={() => setRole('student')}
+            >
+              <FiUser size={20} />
+              I'm a Student
             </button>
-          </form>
+            <button
+              type="button"
+              className={`role-btn ${role === 'teacher' ? 'active' : ''}`}
+              onClick={() => setRole('teacher')}
+            >
+              <FiUserCheck size={20} />
+              I'm a Teacher
+            </button>
+          </div>
 
-          <div className="auth-divider"><span>or</span></div>
-
-          <button className="btn-google" onClick={handleGoogleLogin} disabled={loading}>
-            <FcGoogle size={20} />
-            Continue with Google
+          <button
+            className="btn-google"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+          >
+            {loading
+              ? <span className="spinner" />
+              : <><FcGoogle size={24} /> Continue with Google</>}
           </button>
 
-          <p className="auth-footer">
-            Don't have an account? <Link to="/register">Create one free</Link>
+          <p className="auth-note">
+            First time? Just sign in — your account is created automatically.
           </p>
         </div>
       </div>
 
       <div className="auth-illustration">
         <div className="illustration-content">
-          <h2>Start Your Learning Journey</h2>
-          <p>Access thousands of courses, join live classes, and learn from expert teachers.</p>
-          <div className="feature-list">
-            <div className="feature-item">Live interactive classes with screen sharing</div>
-            <div className="feature-item">Watch recordings anytime, anywhere</div>
-            <div className="feature-item">Real-time chat with teachers</div>
-            <div className="feature-item">Secure content with enrolled-only access</div>
-          </div>
+          {role === 'teacher' ? (
+            <>
+              <h2>Start Teaching Today</h2>
+              <p>Create courses, host live classes, share your screen, and build your student community.</p>
+              <div className="feature-list">
+                <div className="feature-item">HD live streaming with screen share</div>
+                <div className="feature-item">Built-in notepad for live teaching</div>
+                <div className="feature-item">Chat moderation & student management</div>
+                <div className="feature-item">Google Drive video storage</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>Start Your Learning Journey</h2>
+              <p>Access courses, join live classes, and learn from expert teachers.</p>
+              <div className="feature-list">
+                <div className="feature-item">Live interactive classes</div>
+                <div className="feature-item">Watch recordings anytime</div>
+                <div className="feature-item">Real-time chat with teachers</div>
+                <div className="feature-item">Enrolled-only secure content</div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

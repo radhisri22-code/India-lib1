@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './components/shared/Toast';
 import Header from './components/shared/Header';
 import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import CreateCourse from './pages/teacher/CreateCourse';
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -147,9 +146,9 @@ const AppRoutes = () => {
         {/* Root */}
         <Route path="/" element={<RootRedirect />} />
 
-        {/* Auth */}
+        {/* Auth - Google login only, /register redirects to /login */}
         <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
-        <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
 
         {/* Teacher */}
         <Route path="/teacher" element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />

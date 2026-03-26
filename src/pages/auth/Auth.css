@@ -132,6 +132,14 @@
   font-weight: 600;
 }
 
+.auth-note {
+  text-align: center;
+  margin-top: 1.25rem;
+  font-size: 0.8rem;
+  color: var(--gray-400);
+  font-style: italic;
+}
+
 /* Role Selector */
 .role-selector {
   display: grid;

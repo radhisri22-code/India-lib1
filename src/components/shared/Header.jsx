@@ -84,8 +84,7 @@ const Header = () => {
 
         {!currentUser && (
           <div className="header-actions">
-            <Link to="/login" className="btn btn-outline btn-sm">Login</Link>
-            <Link to="/register" className="btn btn-primary btn-sm">Get Started</Link>
+            <Link to="/login" className="btn btn-primary btn-sm">Sign in with Google</Link>
           </div>
         )}
       </div>

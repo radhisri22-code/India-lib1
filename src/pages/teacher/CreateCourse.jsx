@@ -7,11 +7,12 @@ import {
   FiUpload, FiYoutube, FiVideo, FiBook, FiDollarSign,
   FiImage, FiPlus, FiTrash2, FiCheck, FiLink
 } from 'react-icons/fi';
-import { db, storage } from '../../firebase/config';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db } from '../../firebase/config';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
-import { uploadVideoToDrive, signInToDrive } from '../../firebase/googleDrive';
+import { uploadVideoToDrive } from '../../firebase/googleDrive';
 import './CreateCourse.css';
 
 const CATEGORIES = ['Programming', 'Design', 'Business', 'Marketing', 'Music', 'Photography', 'Health', 'Language', 'Science', 'Math', 'History', 'Other'];
@@ -53,9 +54,9 @@ const CreateCourse = () => {
     if (!file) return;
     const preview = URL.createObjectURL(file);
     setThumbnailPreview(preview);
-    // Upload to Firebase Storage
-    const storageRef = ref(storage, `thumbnails/${currentUser.uid}/${Date.now()}_${file.name}`);
-    const task = uploadBytesResumable(storageRef, file);
+    // Upload thumbnail to Firebase Storage
+    const sRef = storageRef(storage, `thumbnails/${currentUser.uid}/${Date.now()}_${file.name}`);
+    const task = uploadBytesResumable(sRef, file);
     task.on('state_changed', null, null, async () => {
       const url = await getDownloadURL(task.snapshot.ref);
       setCourseData(prev => ({ ...prev, thumbnail: url }));
@@ -82,44 +83,21 @@ const CreateCourse = () => {
     setLoading(true);
     setUploadProgress(0);
     try {
-      // Try Google Drive first, fallback to Firebase Storage
-      let result;
-      try {
-        await signInToDrive();
-        result = await uploadVideoToDrive(
-          videoFile,
-          `${currentUser.uid}_${Date.now()}_${videoFile.name}`,
-          (p) => setUploadProgress(p)
-        );
-        setContent(prev => [...prev, {
-          type: 'drive',
-          title: newContent.title,
-          url: result.embedLink,
-          driveId: result.fileId,
-          directLink: result.directLink,
-          order: prev.length
-        }]);
-      } catch {
-        // Fallback: Firebase Storage
-        const storageRef = ref(storage, `videos/${currentUser.uid}/${Date.now()}_${videoFile.name}`);
-        const task = uploadBytesResumable(storageRef, videoFile);
-        await new Promise((resolve, reject) => {
-          task.on('state_changed',
-            snap => setUploadProgress(Math.round(snap.bytesTransferred / snap.totalBytes * 100)),
-            reject,
-            async () => {
-              const url = await getDownloadURL(task.snapshot.ref);
-              setContent(prev => [...prev, {
-                type: 'upload',
-                title: newContent.title,
-                url,
-                order: prev.length
-              }]);
-              resolve();
-            }
-          );
-        });
-      }
+      // Upload to Google Drive (same account: hackthetech0000@gmail.com)
+      toast('Connecting to Google Drive...', 'info');
+      const result = await uploadVideoToDrive(
+        videoFile,
+        `${currentUser.uid}_${Date.now()}_${videoFile.name}`,
+        (p) => setUploadProgress(p)
+      );
+      setContent(prev => [...prev, {
+        type: 'drive',
+        title: newContent.title,
+        url: result.embedLink,
+        driveId: result.fileId,
+        directLink: result.directLink,
+        order: prev.length
+      }]);
       setNewContent({ type: 'youtube', title: '', url: '' });
       setVideoFile(null);
       setUploadProgress(0);
