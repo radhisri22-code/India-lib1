@@ -2,7 +2,13 @@
  * Google Drive Storage
  * Primary storage for all videos & recordings
  * Uses hackthetech0000@gmail.com Google account
+ * Client ID: 271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com
+ * Note: Client Secret is NOT used in frontend (browser OAuth only needs Client ID)
  */
+
+// Hardcoded Google OAuth Client ID (safe to expose in frontend)
+const GOOGLE_CLIENT_ID = "271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com";
+const GOOGLE_API_KEY   = process.env.REACT_APP_GOOGLE_API_KEY || "";
 
 const FOLDER_NAME = 'EduLive-Videos';
 const SCOPE       = 'https://www.googleapis.com/auth/drive.file';
@@ -24,8 +30,8 @@ export const initGoogleDrive = () => {
       window.gapi.load('client:auth2', async () => {
         try {
           await window.gapi.client.init({
-            apiKey:        process.env.REACT_APP_GOOGLE_API_KEY,
-            clientId:      process.env.REACT_APP_GOOGLE_CLIENT_ID,
+            apiKey:        GOOGLE_API_KEY,
+            clientId:      GOOGLE_CLIENT_ID,
             discoveryDocs: [DISCOVERY],
             scope:         SCOPE
           });
