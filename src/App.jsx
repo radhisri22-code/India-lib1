@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './components/shared/Toast';
 import Header from './components/shared/Header';
@@ -62,11 +62,14 @@ const TeacherCoursesPage = () => {
       try {
         const q = query(
           collection(db, 'courses'),
-          where('teacherId', '==', currentUser.uid),
-          orderBy('createdAt', 'desc')
+          where('teacherId', '==', currentUser.uid)
         );
         const snap = await getDocs(q);
-        setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setCourses(
+          snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        );
       } finally {
         setLoading(false);
       }

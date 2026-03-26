@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  collection, query, where, getDocs, orderBy
+  collection, query, where, getDocs
 } from 'firebase/firestore';
 import {
   FiBook, FiVideo, FiUsers, FiPlus, FiTrendingUp,
@@ -25,11 +25,12 @@ const TeacherDashboard = () => {
     try {
       const q = query(
         collection(db, 'courses'),
-        where('teacherId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('teacherId', '==', currentUser.uid)
       );
       const snap = await getDocs(q);
-      const courseData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const courseData = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setCourses(courseData);
 
       const totalStudents = courseData.reduce((acc, c) => acc + (c.enrolledCount || 0), 0);

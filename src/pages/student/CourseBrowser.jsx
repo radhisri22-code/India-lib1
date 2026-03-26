@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { FiSearch, FiFilter, FiStar, FiUsers, FiClock, FiVideo, FiBook } from 'react-icons/fi';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,9 +28,13 @@ const CourseBrowser = () => {
 
   const fetchCourses = async () => {
     try {
-      const q = query(collection(db, 'courses'), where('isPublished', '==', true), orderBy('createdAt', 'desc'));
+      const q = query(collection(db, 'courses'), where('isPublished', '==', true));
       const snap = await getDocs(q);
-      setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCourses(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+      );
     } catch (err) {
       console.error('Error fetching courses:', err);
     } finally {
