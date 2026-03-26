@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isTeacher() {
+      return isAuth() && getUserData().role == 'teacher';
+    }
+
+    function isStudent() {
+      return isAuth() && getUserData().role == 'student';
+    }
+
+    function isEnrolled(courseId) {
+      return isAuth() && courseId in getUserData().enrolledCourses;
+    }
+
+    function isCourseTeacher(courseId) {
+      return isAuth() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    // Courses collection
+    match /courses/{courseId} {
+      // Anyone authenticated can read published courses
+      allow read: if isAuth() && (resource.data.isPublished == true || isCourseTeacher(courseId));
+      // Only teachers can create courses
+      allow create: if isTeacher();
+      // Only course teacher can update/delete
+      allow update: if isCourseTeacher(courseId) || isAuth(); // allow enroll updates
+      allow delete: if isCourseTeacher(courseId);
+
+      // Course content & live sessions - only enrolled + teacher
+      match /liveSessions/{sessionId} {
+        allow read: if isAuth() && (isEnrolled(courseId) || isCourseTeacher(courseId));
+        allow write: if isCourseTeacher(courseId);
+
+        // Comments on recordings
+        match /comments/{commentId} {
+          allow read: if isAuth() && (isEnrolled(courseId) || isCourseTeacher(courseId));
+          allow create: if isAuth() && (isEnrolled(courseId) || isCourseTeacher(courseId));
+          allow delete: if isOwner(resource.data.userId) || isCourseTeacher(courseId);
+        }
+      }
+
+      // Comments on course content
+      match /content/{contentId}/comments/{commentId} {
+        allow read: if isAuth() && (isEnrolled(courseId) || isCourseTeacher(courseId));
+        allow create: if isAuth() && (isEnrolled(courseId) || isCourseTeacher(courseId));
+        allow delete: if isOwner(resource.data.userId) || isCourseTeacher(courseId);
+      }
+    }
+  }
+}

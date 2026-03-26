@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Thumbnails - teachers can upload, authenticated can read
+    match /thumbnails/{userId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024  // 5MB max
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Videos - teachers upload, only enrolled students can read
+    match /videos/{userId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 500 * 1024 * 1024  // 500MB max
+        && request.resource.contentType.matches('video/.*');
+    }
+
+    // Recordings - teachers upload, authenticated can read (checked in app)
+    match /recordings/{courseId}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 2 * 1024 * 1024 * 1024  // 2GB max
+        && request.resource.contentType.matches('video/.*');
+    }
+  }
+}

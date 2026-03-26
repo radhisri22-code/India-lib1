@@ -1,0 +1,124 @@
+.setup-check-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-50);
+  padding: 2rem;
+}
+
+.setup-check-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 2.5rem;
+}
+
+.setup-check-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.setup-check-header h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  margin-bottom: 0.5rem;
+}
+
+.setup-check-header p {
+  color: var(--gray-500);
+  font-size: 0.95rem;
+}
+
+.checks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  border: 1.5px solid var(--gray-200);
+  transition: var(--transition);
+  min-height: 56px;
+}
+
+.check-item.pass { border-color: #86efac; background: #f0fdf4; }
+.check-item.fail { border-color: #fca5a5; background: #fef2f2; }
+.check-item.warn { border-color: #fde68a; background: #fffbeb; }
+
+.check-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+}
+
+.check-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.check-msg {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.check-item.pass .check-msg  { color: #16a34a; }
+.check-item.fail .check-msg  { color: var(--danger); }
+.check-item.warn .check-msg  { color: #d97706; }
+
+/* Result */
+.setup-result {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  margin-top: 1.5rem;
+}
+
+.setup-result.success { background: #f0fdf4; border: 1.5px solid #86efac; }
+.setup-result.error   { background: #fffbeb; border: 1.5px solid #fde68a; }
+
+.setup-result strong { display: block; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem; }
+.setup-result p { font-size: 0.85rem; color: var(--gray-600); }
+.setup-result a { color: var(--primary); font-weight: 600; }
+.setup-result code {
+  background: var(--gray-200);
+  padding: 0.1rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+/* Links */
+.setup-links {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.setup-link {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8rem;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--primary-light);
+  transition: var(--transition);
+}
+
+.setup-link:hover { background: var(--primary-light); }

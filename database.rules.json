@@ -1,0 +1,31 @@
+{
+  "rules": {
+    "liveSessions": {
+      "$sessionId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "chat": {
+          "$messageId": {
+            ".read": "auth != null",
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['text', 'senderId', 'senderName', 'timestamp'])"
+          }
+        },
+        "viewers": {
+          "$userId": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid == $userId"
+          }
+        },
+        "notepad": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "chatMuted": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
