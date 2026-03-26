@@ -51,9 +51,15 @@ export const initGoogleDrive = () => {
 // ─── Sign in to Google Drive ──────────────────────────────────────────────────
 export const signInToDrive = async () => {
   await initGoogleDrive();
-  const auth = window.gapi.auth2.getAuthInstance();
-  if (!auth.isSignedIn.get()) {
-    await auth.signIn({ login_hint: 'hackthetech0000@gmail.com' });
+  const gauth = window.gapi.auth2.getAuthInstance();
+  if (!gauth.isSignedIn.get()) {
+    await gauth.signIn({ login_hint: 'hackthetech0000@gmail.com' });
+  } else {
+    // Grant Drive scope if not already granted
+    const user = gauth.currentUser.get();
+    if (!user.hasGrantedScopes(SCOPE)) {
+      await user.grant({ scope: SCOPE });
+    }
   }
   return window.gapi.auth.getToken()?.access_token;
 };

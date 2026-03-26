@@ -1,21 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ref as dbRef, push, onValue, off, set, update, remove, serverTimestamp as rtServerTimestamp
+  ref as dbRef, push, onValue, off, set, update, remove
 } from 'firebase/database';
-import { doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
+import {
+  doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp, getDocs, query, where
+} from 'firebase/firestore';
 import {
   FiMic, FiMicOff, FiVideo, FiVideoOff, FiMonitor,
   FiUsers, FiMessageSquare, FiEdit3, FiStopCircle, FiSend,
-  FiTrash2, FiSlash, FiX, FiVolume2, FiVolumeX, FiMaximize,
-  FiDownload, FiAlertCircle
+  FiTrash2, FiSlash, FiX, FiVolume2, FiVolumeX, FiPlay, FiBook
 } from 'react-icons/fi';
 import { rtdb, db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
-import { uploadBlobToDrive, signInToDrive } from '../../firebase/googleDrive';
+import { uploadBlobToDrive } from '../../firebase/googleDrive';
 import Notepad from '../../components/shared/Notepad';
 import './LiveClassroom.css';
+
+// Safe MediaRecorder mimeType
+const getSupportedMimeType = () => {
+  const types = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4'
+  ];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+};
 
 const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
   const { courseId, sessionId } = useParams();
@@ -23,124 +35,140 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
   const { currentUser, userProfile } = useAuth();
   const { toast } = useToast();
 
-  // Media streams
-  const [localStream, setLocalStream] = useState(null);
-  const [screenStream, setScreenStream] = useState(null);
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
-  const [screenOn, setScreenOn] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-
-  // UI state
-  const [chatOpen, setChatOpen] = useState(true);
-  const [notepadOpen, setNotepadOpen] = useState(false);
-  const [chatMuted, setChatMuted] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [newMsg, setNewMsg] = useState('');
-  const [viewerCount, setViewerCount] = useState(0);
-  const [liveSession, setLiveSession] = useState(null);
-
-  // Refs
-  const localVideoRef = useRef(null);
-  const screenVideoRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const recordingTimerRef = useRef(null);
-  const chatBottomRef = useRef(null);
-  const peerConnectionsRef = useRef({});
-
   const isTeacher = isTeacherMode || userProfile?.role === 'teacher';
-  const sessionRef = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}`) : null;
-  const chatRef = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}/chat`) : null;
+
+  // ─── Media state ───────────────────────────────────────────────────────────
+  const [localStream,  setLocalStream]  = useState(null);
+  const [screenStream, setScreenStream] = useState(null);
+  const [micOn,        setMicOn]        = useState(true);
+  const [camOn,        setCamOn]        = useState(true);
+  const [screenOn,     setScreenOn]     = useState(false);
+  const [recording,    setRecording]    = useState(false);
+  const [recordingTime,setRecordingTime]= useState(0);
+  const [saving,       setSaving]       = useState(false);
+
+  // ─── UI state ──────────────────────────────────────────────────────────────
+  const [chatOpen,     setChatOpen]     = useState(true);
+  const [notepadOpen,  setNotepadOpen]  = useState(false);
+  const [chatMuted,    setChatMuted]    = useState(false);
+  const [messages,     setMessages]     = useState([]);
+  const [newMsg,       setNewMsg]       = useState('');
+  const [viewerCount,  setViewerCount]  = useState(0);
+  const [myCourses,    setMyCourses]    = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState(courseId || '');
+  const [loadingCourses,  setLoadingCourses] = useState(false);
+
+  // ─── Refs ─────────────────────────────────────────────────────────────────
+  const localVideoRef   = useRef(null);
+  const screenVideoRef  = useRef(null);
+  const mediaRecorderRef= useRef(null);
+  const recordedChunks  = useRef([]);
+  const recordingTimer  = useRef(null);
+  const chatBottomRef   = useRef(null);
+
+  const chatRef    = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}/chat`)    : null;
   const viewersRef = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}/viewers`) : null;
 
-  // ─── Start Camera & Mic ────────────────────────────────────────────────────
+  // ─── Load teacher's courses (for setup page) ──────────────────────────────
   useEffect(() => {
-    if (isTeacher) {
-      startLocalMedia();
+    if (isTeacher && !sessionId) fetchMyCourses();
+  }, [isTeacher, sessionId]);
+
+  const fetchMyCourses = async () => {
+    setLoadingCourses(true);
+    try {
+      const q = query(collection(db, 'courses'), where('teacherId', '==', currentUser.uid));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setMyCourses(list);
+      if (list.length > 0 && !selectedCourse) setSelectedCourse(list[0].id);
+    } catch (e) {
+      toast('Could not load courses: ' + e.message, 'error');
+    } finally {
+      setLoadingCourses(false);
     }
-    return () => {
-      stopAll();
-    };
+  };
+
+  // ─── Start camera + mic ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (isTeacher) startLocalMedia();
+    return stopAll;
   }, []);
+
+  // Assign stream to video element whenever stream changes
+  useEffect(() => {
+    if (localStream && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (screenStream && screenVideoRef.current) {
+      screenVideoRef.current.srcObject = screenStream;
+    }
+  }, [screenStream]);
 
   const startLocalMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     } catch (err) {
-      toast('Camera/Mic access denied: ' + err.message, 'error');
+      toast('Camera/Mic: ' + err.message, 'error');
     }
   };
 
-  // ─── Start Live Session (Teacher) ─────────────────────────────────────────
+  // ─── Start live session ───────────────────────────────────────────────────
   const startLiveSession = async () => {
+    if (!selectedCourse) { toast('Please select a course first', 'error'); return; }
     try {
-      const sessionData = {
-        courseId,
-        teacherId: currentUser.uid,
-        teacherName: userProfile?.displayName,
-        startedAt: serverTimestamp(),
-        isLive: true,
-        chatMuted: false,
-        viewerCount: 0,
-        title: `Live Class - ${new Date().toLocaleDateString()}`
+      const data = {
+        courseId:    selectedCourse,
+        teacherId:   currentUser.uid,
+        teacherName: userProfile?.displayName || currentUser.email,
+        startedAt:   serverTimestamp(),
+        isLive:      true,
+        chatMuted:   false,
+        title:       `Live Class - ${new Date().toLocaleDateString('en-IN')}`
       };
-      const sessionDoc = await addDoc(collection(db, `courses/${courseId}/liveSessions`), sessionData);
-
-      // Set in RTDB for real-time
-      await set(dbRef(rtdb, `liveSessions/${sessionDoc.id}`), {
-        ...sessionData,
+      const docRef = await addDoc(collection(db, `courses/${selectedCourse}/liveSessions`), data);
+      await set(dbRef(rtdb, `liveSessions/${docRef.id}`), {
+        ...data,
+        startedAt: Date.now(),
         isLive: true,
-        chatMuted: false,
-        startedAt: Date.now()
+        chatMuted: false
       });
-
-      setLiveSession({ id: sessionDoc.id, ...sessionData });
-      toast('Live session started!', 'success');
-      navigate(`/live/${courseId}/${sessionDoc.id}`);
+      toast('Live session started! 🎉', 'success');
+      navigate(`/live/${selectedCourse}/${docRef.id}`);
     } catch (err) {
-      toast('Failed to start session: ' + err.message, 'error');
+      toast('Failed to start: ' + err.message, 'error');
     }
   };
 
-  // ─── End Live Session (Teacher) ───────────────────────────────────────────
+  // ─── End live session ─────────────────────────────────────────────────────
   const endLiveSession = async () => {
     if (!sessionId) return;
     try {
-      // Stop recording if active
       if (recording) await stopRecording();
-
-      // Mark session as ended
       await update(dbRef(rtdb, `liveSessions/${sessionId}`), { isLive: false, endedAt: Date.now() });
       await updateDoc(doc(db, `courses/${courseId}/liveSessions`, sessionId), {
-        isLive: false,
-        endedAt: serverTimestamp()
+        isLive: false, endedAt: serverTimestamp()
       });
-      await updateDoc(doc(db, 'courses', courseId), {
-        liveSessionCount: arrayUnion(sessionId)
-      });
-
       stopAll();
       toast('Live session ended', 'info');
       navigate(`/teacher/courses/${courseId}`);
     } catch (err) {
-      toast('Error ending session: ' + err.message, 'error');
+      toast('Error ending: ' + err.message, 'error');
     }
   };
 
-  // ─── Toggle Controls ───────────────────────────────────────────────────────
+  // ─── Media controls ───────────────────────────────────────────────────────
   const toggleMic = () => {
-    if (!localStream) return;
-    const track = localStream.getAudioTracks()[0];
+    const track = localStream?.getAudioTracks()[0];
     if (track) { track.enabled = !track.enabled; setMicOn(track.enabled); }
   };
 
   const toggleCam = () => {
-    if (!localStream) return;
-    const track = localStream.getVideoTracks()[0];
+    const track = localStream?.getVideoTracks()[0];
     if (track) { track.enabled = !track.enabled; setCamOn(track.enabled); }
   };
 
@@ -151,11 +179,10 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
       setScreenOn(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         setScreenStream(stream);
-        if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
         setScreenOn(true);
-        stream.getVideoTracks()[0].onended = () => { setScreenOn(false); setScreenStream(null); };
+        stream.getVideoTracks()[0].onended = () => { setScreenStream(null); setScreenOn(false); };
       } catch (err) {
         if (err.name !== 'NotAllowedError') toast('Screen share failed: ' + err.message, 'error');
       }
@@ -167,152 +194,176 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
     const stream = screenStream || localStream;
     if (!stream) { toast('No stream to record', 'error'); return; }
 
-    recordedChunksRef.current = [];
-    const mr = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
-    mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
-    mr.start(1000);
-    mediaRecorderRef.current = mr;
-    setRecording(true);
-
-    let elapsed = 0;
-    recordingTimerRef.current = setInterval(() => {
-      elapsed++;
-      setRecordingTime(elapsed);
-    }, 1000);
-    toast('Recording started', 'info');
-  };
-
-  const stopRecording = async () => {
-    return new Promise((resolve) => {
-      if (!mediaRecorderRef.current) { resolve(); return; }
-      clearInterval(recordingTimerRef.current);
-      mediaRecorderRef.current.onstop = async () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        await saveRecording(blob);
-        resolve();
-      };
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-      setRecordingTime(0);
-    });
-  };
-
-  const saveRecording = async (blob) => {
-    const fileName = `recording_${courseId}_${sessionId}_${Date.now()}.webm`;
-    toast('Saving recording to Google Drive...', 'info');
+    const mimeType = getSupportedMimeType();
     try {
-      // Save to Google Drive (same account as Firebase)
-      const result = await uploadBlobToDrive(blob, fileName);
-      const recordingUrl = result.embedLink;
+      recordedChunks.current = [];
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      mr.ondataavailable = e => { if (e.data.size > 0) recordedChunks.current.push(e.data); };
+      mr.start(1000);
+      mediaRecorderRef.current = mr;
+      setRecording(true);
 
-      // Save URL to Firestore so students can watch it later
-      await updateDoc(doc(db, `courses/${courseId}/liveSessions`, sessionId), {
-        recordingUrl,
-        recordingName: fileName,
-        hasRecording: true
-      });
-      toast('Recording saved to Google Drive! ✅', 'success');
+      let t = 0;
+      recordingTimer.current = setInterval(() => setRecordingTime(++t), 1000);
+      toast('Recording started ⏺', 'info');
     } catch (err) {
-      toast('Failed to save recording: ' + err.message, 'error');
+      toast('Recording failed: ' + err.message, 'error');
     }
   };
 
-  // ─── Chat ─────────────────────────────────────────────────────────────────
+  const stopRecording = () => new Promise(resolve => {
+    if (!mediaRecorderRef.current) { resolve(); return; }
+    clearInterval(recordingTimer.current);
+    setRecordingTime(0);
+    mediaRecorderRef.current.onstop = async () => {
+      const blob = new Blob(recordedChunks.current, { type: 'video/webm' });
+      await saveRecording(blob);
+      resolve();
+    };
+    mediaRecorderRef.current.stop();
+    setRecording(false);
+  });
+
+  const saveRecording = async (blob) => {
+    setSaving(true);
+    const fileName = `recording_${courseId}_${Date.now()}.webm`;
+    toast('Saving to Google Drive...', 'info');
+    try {
+      const result = await uploadBlobToDrive(blob, fileName, p =>
+        p === 100 && toast('Upload complete!', 'success')
+      );
+      await updateDoc(doc(db, `courses/${courseId}/liveSessions`, sessionId), {
+        recordingUrl:  result.embedLink,
+        recordingName: fileName,
+        hasRecording:  true
+      });
+      toast('Recording saved to Google Drive ✅', 'success');
+    } catch (err) {
+      toast('Save failed: ' + err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Chat ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!chatRef) return;
     onValue(chatRef, snap => {
       const data = snap.val();
       if (!data) { setMessages([]); return; }
-      const msgs = Object.entries(data)
-        .map(([id, msg]) => ({ id, ...msg }))
+      const list = Object.entries(data)
+        .map(([id, m]) => ({ id, ...m }))
         .sort((a, b) => a.timestamp - b.timestamp);
-      setMessages(msgs);
-      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      setMessages(list);
+      setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     });
     return () => off(chatRef);
   }, [sessionId]);
 
-  // Viewer count
+  // Viewers
   useEffect(() => {
     if (!viewersRef || !sessionId || !currentUser) return;
-    const myViewerRef = dbRef(rtdb, `liveSessions/${sessionId}/viewers/${currentUser.uid}`);
-    set(myViewerRef, { name: userProfile?.displayName, joinedAt: Date.now() });
+    const myRef = dbRef(rtdb, `liveSessions/${sessionId}/viewers/${currentUser.uid}`);
+    set(myRef, { name: userProfile?.displayName, joinedAt: Date.now() });
     onValue(viewersRef, snap => setViewerCount(snap.numChildren()));
-    return () => { remove(myViewerRef); off(viewersRef); };
+    return () => { remove(myRef); off(viewersRef); };
   }, [sessionId]);
 
-  // Chat mute state sync
+  // Chat mute sync
   useEffect(() => {
-    if (!sessionRef) return;
-    onValue(dbRef(rtdb, `liveSessions/${sessionId}/chatMuted`), snap => {
-      setChatMuted(snap.val() || false);
-    });
+    if (!sessionId) return;
+    const ref = dbRef(rtdb, `liveSessions/${sessionId}/chatMuted`);
+    onValue(ref, snap => setChatMuted(snap.val() || false));
+    return () => off(ref);
   }, [sessionId]);
 
   const sendMessage = async () => {
     if (!newMsg.trim() || !chatRef) return;
-    if (chatMuted && !isTeacher) { toast('Chat is muted by the teacher', 'warning'); return; }
-    try {
-      await push(chatRef, {
-        text: newMsg.trim(),
-        senderId: currentUser.uid,
-        senderName: userProfile?.displayName || currentUser.email,
-        timestamp: Date.now(),
-        isTeacher: isTeacher
-      });
-      setNewMsg('');
-    } catch (err) {
-      toast('Failed to send message', 'error');
-    }
+    if (chatMuted && !isTeacher) { toast('Chat is muted by teacher', 'warning'); return; }
+    await push(chatRef, {
+      text:       newMsg.trim(),
+      senderId:   currentUser.uid,
+      senderName: userProfile?.displayName || currentUser.email,
+      timestamp:  Date.now(),
+      isTeacher
+    });
+    setNewMsg('');
   };
 
-  const deleteMessage = async (msgId) => {
+  const deleteMessage = async (id) => {
     if (!isTeacher) return;
-    await remove(dbRef(rtdb, `liveSessions/${sessionId}/chat/${msgId}`));
-    toast('Message deleted', 'info');
+    await remove(dbRef(rtdb, `liveSessions/${sessionId}/chat/${id}`));
+  };
+
+  const blockUser = async (userId, userName) => {
+    if (!isTeacher) return;
+    await remove(dbRef(rtdb, `liveSessions/${sessionId}/viewers/${userId}`));
+    await updateDoc(doc(db, 'courses', courseId), { blockedUsers: arrayUnion(userId) });
+    toast(`${userName} blocked`, 'warning');
   };
 
   const toggleChatMute = async () => {
-    if (!isTeacher) return;
+    if (!isTeacher || !sessionId) return;
     const next = !chatMuted;
     await update(dbRef(rtdb, `liveSessions/${sessionId}`), { chatMuted: next });
     toast(next ? 'Chat muted for students' : 'Chat unmuted', 'info');
   };
 
-  const blockUser = async (userId, userName) => {
-    if (!isTeacher) return;
-    // Remove from viewers
-    await remove(dbRef(rtdb, `liveSessions/${sessionId}/viewers/${userId}`));
-    // Add to blocked list in Firestore
-    await updateDoc(doc(db, 'courses', courseId), {
-      blockedUsers: arrayUnion(userId)
-    });
-    toast(`${userName} has been blocked`, 'warning');
-  };
-
-  // ─── Stop All ─────────────────────────────────────────────────────────────
   const stopAll = () => {
     localStream?.getTracks().forEach(t => t.stop());
     screenStream?.getTracks().forEach(t => t.stop());
-    clearInterval(recordingTimerRef.current);
+    clearInterval(recordingTimer.current);
   };
 
-  const formatTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-  if (!sessionId && isTeacher) {
+  // ─────────────────────────────────────────────────────────────────────────
+  // TEACHER SETUP PAGE (before going live)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (isTeacher && !sessionId) {
     return (
       <div className="live-setup">
         <div className="live-setup-card card">
           <div className="live-setup-icon">🎥</div>
           <h2>Start a Live Class</h2>
-          <p>Your students will be notified when you go live</p>
+          <p>Your enrolled students will see a Live banner instantly</p>
 
           {/* Camera preview */}
           <div className="camera-preview">
             <video ref={localVideoRef} autoPlay muted playsInline className="preview-video" />
+            {!localStream && (
+              <div className="cam-waiting">
+                <span>📷 Waiting for camera...</span>
+                <button className="btn btn-outline btn-sm" onClick={startLocalMedia}>
+                  Allow Camera
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Select Course */}
+          <div className="form-group" style={{ width: '100%', textAlign: 'left' }}>
+            <label className="form-label"><FiBook size={14} /> Select Course</label>
+            {loadingCourses ? (
+              <div className="flex items-center gap-2"><span className="spinner" /> Loading courses...</div>
+            ) : myCourses.length === 0 ? (
+              <div style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>
+                No courses found. <a href="/teacher/courses/new">Create a course first →</a>
+              </div>
+            ) : (
+              <select
+                className="form-input"
+                value={selectedCourse}
+                onChange={e => setSelectedCourse(e.target.value)}
+              >
+                {myCourses.map(c => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Controls */}
           <div className="live-setup-controls">
             <button className={`ctrl-btn ${micOn ? '' : 'off'}`} onClick={toggleMic}>
               {micOn ? <FiMic size={20} /> : <FiMicOff size={20} />}
@@ -324,7 +375,11 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
             </button>
           </div>
 
-          <button className="btn btn-danger btn-lg w-full" onClick={startLiveSession}>
+          <button
+            className="btn btn-danger btn-lg w-full"
+            onClick={startLiveSession}
+            disabled={!selectedCourse || myCourses.length === 0}
+          >
             🔴 Start Live Class
           </button>
         </div>
@@ -332,12 +387,15 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // LIVE ROOM
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="live-room">
-      {/* Video Area */}
+      {/* ── Video Stage ── */}
       <div className="live-main">
         <div className="video-stage">
-          {/* Screen share (primary) */}
+          {/* Screen share */}
           {screenOn && (
             <div className="screen-container">
               <video ref={screenVideoRef} autoPlay playsInline className="screen-video" />
@@ -345,87 +403,68 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
             </div>
           )}
 
-          {/* Camera feed */}
+          {/* Camera */}
           <div className={`cam-container ${screenOn ? 'pip' : 'full'}`}>
             {isTeacher
               ? <video ref={localVideoRef} autoPlay muted playsInline className="cam-video" />
               : <div className="remote-placeholder">
-                  <div className="teacher-avatar">
-                    {userProfile?.displayName?.[0] || 'T'}
-                  </div>
+                  <div className="teacher-avatar">{userProfile?.displayName?.[0] || 'T'}</div>
                   <p>Teacher's Camera</p>
                 </div>}
           </div>
 
-          {/* Live badge */}
-          <div className="live-badge">
-            <div className="live-dot" />
-            LIVE
-          </div>
-
-          {/* Viewer count */}
-          <div className="viewer-badge">
-            <FiUsers size={13} /> {viewerCount}
-          </div>
-
-          {/* Recording indicator */}
-          {recording && (
-            <div className="rec-badge">
-              <div className="live-dot" />
-              REC {formatTime(recordingTime)}
-            </div>
-          )}
+          {/* Badges */}
+          <div className="live-badge"><div className="live-dot" /> LIVE</div>
+          <div className="viewer-badge"><FiUsers size={13} /> {viewerCount}</div>
+          {recording && <div className="rec-badge"><div className="live-dot" /> REC {fmt(recordingTime)}</div>}
+          {saving    && <div className="rec-badge" style={{ top: '5.5rem' }}>💾 Saving...</div>}
         </div>
 
-        {/* Controls Bar */}
+        {/* ── Teacher Controls ── */}
         {isTeacher && (
           <div className="controls-bar">
             <div className="controls-left">
-              <button className={`ctrl-btn ${micOn ? '' : 'off'}`} onClick={toggleMic} title="Toggle Mic">
+              <button className={`ctrl-btn ${micOn ? '' : 'off'}`} onClick={toggleMic}>
                 {micOn ? <FiMic size={20} /> : <FiMicOff size={20} />}
               </button>
-              <button className={`ctrl-btn ${camOn ? '' : 'off'}`} onClick={toggleCam} title="Toggle Camera">
+              <button className={`ctrl-btn ${camOn ? '' : 'off'}`} onClick={toggleCam}>
                 {camOn ? <FiVideo size={20} /> : <FiVideoOff size={20} />}
               </button>
-              <button className={`ctrl-btn ${screenOn ? 'active' : ''}`} onClick={toggleScreen} title="Share Screen">
-                {screenOn ? <FiMonitor size={20} style={{color:'var(--danger)'}} /> : <FiMonitor size={20} />}
+              <button className={`ctrl-btn ${screenOn ? 'active' : ''}`} onClick={toggleScreen}>
+                <FiMonitor size={20} style={screenOn ? { color: 'var(--danger)' } : {}} />
+                {screenOn ? 'Stop Share' : 'Share Screen'}
               </button>
               <button
                 className={`ctrl-btn ${recording ? 'recording' : ''}`}
                 onClick={recording ? stopRecording : startRecording}
-                title={recording ? 'Stop Recording' : 'Start Recording'}
               >
-                {recording ? <FiStopCircle size={20} /> : <span style={{ fontSize: '16px' }}>⏺</span>}
-                {recording ? `Stop (${formatTime(recordingTime)})` : 'Record'}
+                {recording ? <><FiStopCircle size={20} /> Stop {fmt(recordingTime)}</> : <>⏺ Record</>}
               </button>
             </div>
 
             <div className="controls-center">
-              <button className={`ctrl-btn ${notepadOpen ? 'active' : ''}`} onClick={() => setNotepadOpen(!notepadOpen)} title="Notepad">
+              <button className={`ctrl-btn ${notepadOpen ? 'active' : ''}`} onClick={() => setNotepadOpen(!notepadOpen)}>
                 <FiEdit3 size={20} /> Notes
               </button>
-              <button className={`ctrl-btn ${chatMuted ? 'off' : ''}`} onClick={toggleChatMute} title="Mute/Unmute Chat">
+              <button className={`ctrl-btn ${chatMuted ? 'off' : ''}`} onClick={toggleChatMute}>
                 {chatMuted ? <FiVolumeX size={20} /> : <FiVolume2 size={20} />}
-                {chatMuted ? 'Unmute Chat' : 'Mute Chat'}
+                {chatMuted ? 'Unmute' : 'Mute Chat'}
               </button>
             </div>
 
             <div className="controls-right">
-              <button className="ctrl-btn danger" onClick={endLiveSession} title="End Class">
+              <button className="ctrl-btn danger" onClick={endLiveSession}>
                 <FiStopCircle size={20} /> End Class
               </button>
             </div>
           </div>
         )}
 
-        {/* Student controls */}
+        {/* ── Student bar ── */}
         {!isTeacher && (
           <div className="controls-bar">
             <div className="controls-left">
-              <div className="live-info">
-                <div className="live-dot" />
-                <span>You are watching live</span>
-              </div>
+              <div className="live-info"><div className="live-dot" /><span>Watching Live</span></div>
             </div>
             <div className="controls-right">
               <button className={`ctrl-btn ${chatOpen ? 'active' : ''}`} onClick={() => setChatOpen(!chatOpen)}>
@@ -436,12 +475,12 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
         )}
       </div>
 
-      {/* Floating Notepad (Teacher only - while screen sharing) */}
+      {/* ── Floating Notepad ── */}
       {notepadOpen && isTeacher && (
         <Notepad sessionId={sessionId} onClose={() => setNotepadOpen(false)} />
       )}
 
-      {/* Chat Sidebar */}
+      {/* ── Chat Sidebar ── */}
       {chatOpen && (
         <div className="chat-sidebar slide-in">
           <div className="chat-header">
@@ -455,7 +494,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
                 {chatMuted ? <FiVolume2 size={14} /> : <FiVolumeX size={14} />}
               </button>
             )}
-            <button className="btn-icon btn btn-secondary" onClick={() => setChatOpen(false)}>
+            <button className="btn btn-sm btn-secondary" onClick={() => setChatOpen(false)}>
               <FiX size={16} />
             </button>
           </div>
@@ -463,8 +502,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
           <div className="chat-messages">
             {messages.length === 0 && (
               <div className="chat-empty">
-                <FiMessageSquare size={24} />
-                <p>No messages yet. Say hello!</p>
+                <FiMessageSquare size={24} /><p>No messages yet!</p>
               </div>
             )}
             {messages.map(msg => (
@@ -480,10 +518,10 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
                 <div className="msg-body">{msg.text}</div>
                 {isTeacher && msg.senderId !== currentUser?.uid && (
                   <div className="msg-actions">
-                    <button onClick={() => deleteMessage(msg.id)} title="Delete" className="msg-action-btn danger">
+                    <button className="msg-action-btn danger" onClick={() => deleteMessage(msg.id)}>
                       <FiTrash2 size={12} />
                     </button>
-                    <button onClick={() => blockUser(msg.senderId, msg.senderName)} title="Block User" className="msg-action-btn danger">
+                    <button className="msg-action-btn danger" onClick={() => blockUser(msg.senderId, msg.senderName)}>
                       <FiSlash size={12} />
                     </button>
                   </div>
@@ -495,10 +533,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
 
           <div className="chat-input-area">
             {chatMuted && !isTeacher ? (
-              <div className="muted-notice">
-                <FiVolumeX size={16} />
-                Chat is muted by the teacher
-              </div>
+              <div className="muted-notice"><FiVolumeX size={16} /> Chat muted by teacher</div>
             ) : (
               <div className="chat-input-row">
                 <input

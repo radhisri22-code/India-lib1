@@ -46,6 +46,19 @@
   transform: scaleX(-1);
 }
 
+.cam-waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--gray-400);
+  font-size: 0.9rem;
+  background: var(--dark);
+}
+
 .live-setup-controls {
   display: flex;
   gap: 1rem;
