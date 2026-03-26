@@ -5,7 +5,7 @@ import {
 } from 'firebase/database';
 import { doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp, getDoc } from 'firebase/firestore';
 import {
-  FiMic, FiMicOff, FiVideo, FiVideoOff, FiMonitor, FiMonitorOff,
+  FiMic, FiMicOff, FiVideo, FiVideoOff, FiMonitor,
   FiUsers, FiMessageSquare, FiEdit3, FiStopCircle, FiSend,
   FiTrash2, FiSlash, FiX, FiVolume2, FiVolumeX, FiMaximize,
   FiDownload, FiAlertCircle
@@ -397,7 +397,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
                 {camOn ? <FiVideo size={20} /> : <FiVideoOff size={20} />}
               </button>
               <button className={`ctrl-btn ${screenOn ? 'active' : ''}`} onClick={toggleScreen} title="Share Screen">
-                {screenOn ? <FiMonitorOff size={20} /> : <FiMonitor size={20} />}
+                {screenOn ? <FiMonitor size={20} style={{color:'var(--danger)'}} /> : <FiMonitor size={20} />}
               </button>
               <button
                 className={`ctrl-btn ${recording ? 'recording' : ''}`}
