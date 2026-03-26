@@ -24,7 +24,6 @@ export const rtdb    = getDatabase(app);
 
 // Google Drive OAuth Client ID
 export const GDRIVE_CLIENT_ID = "271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com";
-// API Key - add once you get it from Google Cloud Console
-export const GDRIVE_API_KEY   = process.env.REACT_APP_GOOGLE_API_KEY || "";
+export const GDRIVE_API_KEY   = "AIzaSyBXytzZdLGxh153rnbHRfIR7zMFeVdI7Ns";
 
 export default app;

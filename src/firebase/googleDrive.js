@@ -8,7 +8,7 @@
 
 // Hardcoded Google OAuth Client ID (safe to expose in frontend)
 const GOOGLE_CLIENT_ID = "271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com";
-const GOOGLE_API_KEY   = process.env.REACT_APP_GOOGLE_API_KEY || "";
+const GOOGLE_API_KEY   = "AIzaSyBXytzZdLGxh153rnbHRfIR7zMFeVdI7Ns";
 
 const FOLDER_NAME = 'EduLive-Videos';
 const SCOPE       = 'https://www.googleapis.com/auth/drive.file';
