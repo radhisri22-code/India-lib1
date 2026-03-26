@@ -1,0 +1,105 @@
+.notepad {
+  position: fixed;
+  width: 380px;
+  background: #1e293b;
+  border-radius: var(--radius);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  z-index: 1000;
+  border: 1px solid rgba(255,255,255,0.1);
+  user-select: none;
+  resize: both;
+  overflow: hidden;
+  min-width: 280px;
+  min-height: 200px;
+}
+
+.notepad.dragging { cursor: grabbing; opacity: 0.95; }
+
+.notepad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  cursor: grab;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.notepad-header:active { cursor: grabbing; }
+
+.notepad-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gray-300);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.notepad-sync-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: blink 2s infinite;
+}
+
+.notepad-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.notepad-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-400);
+  transition: var(--transition);
+}
+
+.notepad-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+.notepad-btn.danger:hover { background: var(--danger); color: white; }
+
+.notepad-body {
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+}
+
+.notepad-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  padding: 1rem;
+  resize: none;
+  width: 100%;
+}
+
+.notepad-textarea::placeholder { color: #475569; }
+
+.notepad-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.375rem 0.875rem;
+  background: #0f172a;
+  font-size: 0.7rem;
+  color: var(--gray-600);
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.notepad.minimized {
+  height: auto;
+  resize: none;
+}
