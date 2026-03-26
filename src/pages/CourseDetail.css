@@ -295,6 +295,38 @@
 
 .enroll-feature svg { color: var(--success); flex-shrink: 0; }
 
+/* Hero progress */
+.hero-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.8);
+}
+
+.hero-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 200px;
+}
+
+.hero-progress-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* Completed lesson badge */
+.curriculum-num-badge.done {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
 /* Player nav (prev/next) */
 .player-nav {
   display: flex;

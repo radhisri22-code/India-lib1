@@ -158,6 +158,7 @@ select.form-input { cursor: pointer; }
   letter-spacing: 0.05em;
 }
 .badge-primary { background: var(--primary-light); color: var(--primary); }
+.badge-secondary { background: var(--gray-100); color: var(--gray-600); }
 .badge-success { background: #dcfce7; color: #16a34a; }
 .badge-danger { background: #fee2e2; color: #dc2626; }
 .badge-warning { background: #fef3c7; color: #d97706; }
