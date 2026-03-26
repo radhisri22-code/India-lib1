@@ -12,6 +12,7 @@ import StudentDashboard from './pages/student/StudentDashboard';
 import CourseBrowser from './pages/student/CourseBrowser';
 import CourseDetail from './pages/CourseDetail';
 import LiveClassroom from './pages/teacher/LiveClassroom';
+import SetupCheck from './pages/SetupCheck';
 import { db } from './firebase/config';
 import './index.css';
 
@@ -166,6 +167,9 @@ const AppRoutes = () => {
 
         {/* Live Class - full screen, no header */}
         <Route path="/live/:courseId/:sessionId" element={<PrivateRoute><LiveClassroom /></PrivateRoute>} />
+
+        {/* Setup Check */}
+        <Route path="/setup-check" element={<SetupCheck />} />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
