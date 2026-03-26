@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { onValue, ref as dbRef } from 'firebase/database';
 import { FiBook, FiVideo, FiPlay, FiClock, FiStar, FiTrendingUp, FiSearch } from 'react-icons/fi';
 import { db, rtdb } from '../../firebase/config';

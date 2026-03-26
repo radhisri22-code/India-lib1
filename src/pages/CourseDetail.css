@@ -295,6 +295,49 @@
 
 .enroll-feature svg { color: var(--success); flex-shrink: 0; }
 
+/* Player nav (prev/next) */
+.player-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--gray-100);
+  margin-top: 0.25rem;
+}
+
+/* Curriculum num badge */
+.curriculum-num-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.curriculum-num-badge.rec {
+  background: rgba(239,68,68,0.1);
+  color: var(--danger);
+  font-size: 0.6rem;
+}
+
+.curriculum-type { font-size: 0.72rem; }
+
+/* Live dot inline */
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse 1.5s infinite;
+  flex-shrink: 0;
+}
+
 .loading-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 4rem; color: var(--gray-500); }
 
 @media (max-width: 1024px) {

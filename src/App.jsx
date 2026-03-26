@@ -1,11 +1,12 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './components/shared/Toast';
 import Header from './components/shared/Header';
 import Login from './pages/auth/Login';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
+import TeacherCourseManage from './pages/teacher/TeacherCourseManage';
 import CreateCourse from './pages/teacher/CreateCourse';
 import StudentDashboard from './pages/student/StudentDashboard';
 import CourseBrowser from './pages/student/CourseBrowser';
@@ -13,6 +14,9 @@ import CourseDetail from './pages/CourseDetail';
 import LiveClassroom from './pages/teacher/LiveClassroom';
 import SetupCheck from './pages/SetupCheck';
 import { db } from './firebase/config';
+import {
+  FiBook, FiVideo, FiClock, FiUsers, FiPlay, FiMonitor
+} from 'react-icons/fi';
 import './index.css';
 
 // ─── Route Guards ──────────────────────────────────────────────────────────────
@@ -123,6 +127,75 @@ const TeacherCoursesPage = () => {
   );
 };
 
+// ─── Enrolled Courses Page ─────────────────────────────────────────────────────
+
+const EnrolledCoursesPage = () => {
+  const { currentUser, userProfile } = useAuth();
+  const [courses, setCourses] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchEnrolled = async () => {
+      if (!userProfile?.enrolledCourses?.length) { setLoading(false); return; }
+      try {
+        const list = [];
+        for (const id of userProfile.enrolledCourses) {
+          const snap = await getDoc(doc(db, 'courses', id));
+          if (snap.exists()) list.push({ id: snap.id, ...snap.data() });
+        }
+        setCourses(list);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEnrolled();
+  }, [userProfile]);
+
+  return (
+    <div style={{ maxWidth: 1300, margin: '0 auto', padding: '2rem 1.5rem' }}>
+      <div className="flex justify-between items-center" style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--gray-900)' }}>My Enrolled Courses</h1>
+        <Link to="/student/courses" className="btn btn-primary">Browse More</Link>
+      </div>
+      {loading ? (
+        <div className="loading-state"><div className="spinner spinner-lg" /></div>
+      ) : courses.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '4rem' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🎓</div>
+          <h3 style={{ marginBottom: '0.5rem', color: 'var(--gray-900)' }}>No enrolled courses yet</h3>
+          <p className="text-muted" style={{ marginBottom: '1.5rem' }}>Explore courses and enroll to start learning</p>
+          <Link to="/student/courses" className="btn btn-primary">Browse Courses</Link>
+        </div>
+      ) : (
+        <div className="grid grid-3" style={{ gap: '1.25rem' }}>
+          {courses.map(c => (
+            <Link key={c.id} to={`/student/courses/${c.id}`} className="card"
+              style={{ textDecoration: 'none', color: 'inherit', padding: '0', overflow: 'hidden' }}>
+              {c.thumbnail
+                ? <img src={c.thumbnail} alt={c.title} style={{ width: '100%', height: 150, objectFit: 'cover' }} />
+                : <div style={{ width: '100%', height: 150, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: 'white', fontWeight: 800 }}>
+                    {c.title?.[0]}
+                  </div>}
+              <div style={{ padding: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                  <span className="badge badge-primary text-xs">{c.category}</span>
+                  <span className="badge badge-success text-xs">Enrolled</span>
+                </div>
+                <h3 style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.375rem', color: 'var(--gray-900)' }}>{c.title}</h3>
+                <p className="text-muted text-xs" style={{ marginBottom: '0.625rem' }}>by {c.teacherName}</p>
+                <div style={{ display: 'flex', gap: '0.875rem', fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                  <span><FiVideo size={12} /> {c.contentCount || 0} lessons</span>
+                  <span><FiClock size={12} /> {c.duration || 'N/A'}</span>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Not Found ─────────────────────────────────────────────────────────────────
 
 const NotFound = () => (
@@ -157,7 +230,7 @@ const AppRoutes = () => {
         <Route path="/teacher" element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
         <Route path="/teacher/courses" element={<TeacherRoute><TeacherCoursesPage /></TeacherRoute>} />
         <Route path="/teacher/courses/new" element={<TeacherRoute><CreateCourse /></TeacherRoute>} />
-        <Route path="/teacher/courses/:courseId" element={<TeacherRoute><CourseDetail /></TeacherRoute>} />
+        <Route path="/teacher/courses/:courseId" element={<TeacherRoute><TeacherCourseManage /></TeacherRoute>} />
         <Route path="/teacher/live" element={<TeacherRoute><LiveClassroom isTeacher={true} /></TeacherRoute>} />
         <Route path="/teacher/live/:courseId" element={<TeacherRoute><LiveClassroom isTeacher={true} /></TeacherRoute>} />
 
@@ -165,7 +238,7 @@ const AppRoutes = () => {
         <Route path="/student" element={<StudentRoute><StudentDashboard /></StudentRoute>} />
         <Route path="/student/courses" element={<StudentRoute><CourseBrowser /></StudentRoute>} />
         <Route path="/student/courses/:courseId" element={<StudentRoute><CourseDetail /></StudentRoute>} />
-        <Route path="/student/enrolled" element={<StudentRoute><StudentDashboard /></StudentRoute>} />
+        <Route path="/student/enrolled" element={<StudentRoute><EnrolledCoursesPage /></StudentRoute>} />
 
         {/* Live Class - full screen, no header */}
         <Route path="/live/:courseId/:sessionId" element={<PrivateRoute><LiveClassroom /></PrivateRoute>} />

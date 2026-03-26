@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ref as dbRef, push, onValue, off, set, update, remove
 } from 'firebase/database';
@@ -31,6 +31,7 @@ const getSupportedMimeType = () => {
 
 const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
   const { courseId, sessionId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const { toast } = useToast();
@@ -55,7 +56,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
   const [newMsg,       setNewMsg]       = useState('');
   const [viewerCount,  setViewerCount]  = useState(0);
   const [myCourses,    setMyCourses]    = useState([]);
-  const [selectedCourse, setSelectedCourse] = useState(courseId || '');
+  const [selectedCourse, setSelectedCourse] = useState(courseId || searchParams.get('course') || '');
   const [loadingCourses,  setLoadingCourses] = useState(false);
 
   // ─── Refs ─────────────────────────────────────────────────────────────────
