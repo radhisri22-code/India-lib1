@@ -13,6 +13,7 @@ import CourseBrowser from './pages/student/CourseBrowser';
 import CourseDetail from './pages/CourseDetail';
 import LiveClassroom from './pages/teacher/LiveClassroom';
 import SetupCheck from './pages/SetupCheck';
+import LiveNotification from './components/shared/LiveNotification';
 import { db } from './firebase/config';
 import {
   FiBook, FiVideo, FiClock, FiUsers, FiPlay, FiMonitor
@@ -218,6 +219,7 @@ const AppRoutes = () => {
   return (
     <>
       {!isLivePage && <Header />}
+      <LiveNotification />
       <Routes>
         {/* Root */}
         <Route path="/" element={<RootRedirect />} />

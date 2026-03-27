@@ -253,17 +253,22 @@ const CourseDetail = () => {
 
       <div className="course-body">
         <div className="course-main">
-          {/* Live Banner */}
-          {currentLive && canWatch && (
+          {/* Live Banner — shown to everyone; enrolled can join, others prompted to enroll */}
+          {currentLive && (
             <div className="live-alert">
               <div className="live-dot"/>
               <div>
                 <strong>Live class in progress!</strong>
                 <span>{currentLive.teacherName} is teaching now</span>
               </div>
-              <Link to={`/live/${courseId}/${currentLive.id}`} className="btn btn-danger">
-                <FiPlay size={14}/> Join Live
-              </Link>
+              {canWatch
+                ? <Link to={`/live/${courseId}/${currentLive.id}`} className="btn btn-danger">
+                    <FiPlay size={14}/> Join Live
+                  </Link>
+                : <button className="btn btn-danger" onClick={handleEnrollClick}>
+                    <FiPlay size={14}/> Enroll &amp; Join
+                  </button>
+              }
             </div>
           )}
 
