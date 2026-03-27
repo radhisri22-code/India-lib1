@@ -163,7 +163,7 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
         chatMuted: false
       });
       toast('Live session started! 🎉', 'success');
-      navigate(`/live/${selectedCourse}/${docRef.id}`);
+      navigate(`/teacher/live/${selectedCourse}/${docRef.id}`);
     } catch (err) {
       toast('Failed to start: ' + err.message, 'error');
     }

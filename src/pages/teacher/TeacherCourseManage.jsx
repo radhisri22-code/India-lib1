@@ -13,13 +13,13 @@ import {
 import { db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
-import { uploadVideoToDrive } from '../../firebase/googleDrive';
+import { uploadVideoToDrive, getGDriveToken } from '../../firebase/googleDrive';
 import './TeacherCourseManage.css';
 
 const TeacherCourseManage = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, refreshDriveToken } = useAuth();
   const { toast } = useToast();
 
   const [course, setCourse]     = useState(null);
@@ -49,6 +49,7 @@ const TeacherCourseManage = () => {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({});
 
+  const [driveConnected, setDriveConnected] = useState(!!driveConnected);
   const fileInputRef = useRef();
 
   useEffect(() => { fetchAll(); }, [courseId]);
@@ -128,19 +129,44 @@ const TeacherCourseManage = () => {
   // ─── Upload to Drive ──────────────────────────────────────────────────────
   const uploadDrive = async () => {
     if (!newTitle.trim() || !videoFile) { toast('Title and video required', 'error'); return; }
+
+    // Check token before starting — prompt reconnect if missing/expired
+    if (!driveConnected) {
+      toast('Google Drive not connected. Click "Connect Drive" first.', 'error'); return;
+    }
+
     setUploading(true); setUploadProgress(0);
     try {
-      toast('Uploading to Google Drive...', 'info');
-      const result = await uploadVideoToDrive(videoFile, `${currentUser.uid}_${Date.now()}_${videoFile.name}`, p => setUploadProgress(p));
-      const updated = [...content, { type: 'drive', title: newTitle.trim(), url: result.embedLink, driveId: result.fileId, directLink: result.directLink, order: content.length }];
+      toast('Uploading to Google Drive… please wait', 'info');
+      const result = await uploadVideoToDrive(
+        videoFile,
+        `${currentUser.uid}_${Date.now()}_${videoFile.name}`,
+        p => setUploadProgress(p)
+      );
+      const updated = [...content, {
+        type: 'drive', title: newTitle.trim(),
+        url: result.embedLink, driveId: result.fileId,
+        directLink: result.directLink, order: content.length
+      }];
       saveContent(updated);
       setNewTitle(''); setVideoFile(null); setUploadProgress(0);
-      toast('Video uploaded!', 'success');
+      toast('Video uploaded to Google Drive! ✅', 'success');
     } catch (err) {
-      toast('Upload failed: ' + err.message, 'error');
+      if (err.message.includes('expired') || err.message.includes('session')) {
+        toast('Drive session expired — click "Connect Drive" to reconnect, then upload again.', 'error');
+      } else {
+        toast('Upload failed: ' + err.message, 'error');
+      }
     } finally {
       setUploading(false);
     }
+  };
+
+  const connectDrive = async () => {
+    toast('Opening Google sign-in to connect Drive…', 'info');
+    const ok = await refreshDriveToken();
+    if (ok) { setDriveConnected(true); toast('Google Drive connected! You can now upload videos.', 'success'); }
+    else toast('Drive connection cancelled.', 'warning');
   };
 
   const removeContent = (index) => {
@@ -357,17 +383,39 @@ const TeacherCourseManage = () => {
                   </div>
                 ) : (
                   <>
+                    {/* Drive connection status */}
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0.625rem 0.875rem', background: driveConnected ? '#f0fdf4' : '#fef2f2', border: `1px solid ${driveConnected ? '#86efac' : '#fca5a5'}`, borderRadius:'var(--radius-sm)', marginBottom:'0.75rem' }}>
+                      <span style={{ fontSize:'0.82rem', fontWeight:600, color: driveConnected ? '#15803d' : '#dc2626' }}>
+                        {driveConnected ? '✅ Google Drive connected' : '❌ Google Drive not connected'}
+                      </span>
+                      <button className="btn btn-sm" style={{ background: '#4285f4', color:'white', fontSize:'0.78rem' }} onClick={connectDrive}>
+                        🔗 {driveConnected ? 'Reconnect Drive' : 'Connect Drive'}
+                      </button>
+                    </div>
+
                     <div className="file-drop" onClick={() => fileInputRef.current?.click()}>
-                      {videoFile ? <><FiVideo size={22}/><span>{videoFile.name}</span><small>{(videoFile.size/1e6).toFixed(1)} MB</small></> : <><FiUpload size={22}/><span>Click to select video</span><small>MP4, WebM, MOV</small></>}
+                      {videoFile
+                        ? <><FiVideo size={22}/><span>{videoFile.name}</span><small>{(videoFile.size/1e6).toFixed(1)} MB — any size allowed</small></>
+                        : <><FiUpload size={22}/><span>Click to select video file</span><small>MP4, WebM, MOV — no size limit</small></>}
                       <input ref={fileInputRef} type="file" accept="video/*" hidden onChange={e => setVideoFile(e.target.files[0])} />
                     </div>
-                    {uploadProgress > 0 && uploadProgress < 100 && (
-                      <div className="progress-bar" style={{ margin: '0.5rem 0' }}>
-                        <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+
+                    {uploading && (
+                      <div style={{ margin: '0.5rem 0' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.78rem', marginBottom:'0.3rem', color:'var(--gray-600)' }}>
+                          <span>Uploading to Google Drive…</span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <div className="progress-bar">
+                          <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                        </div>
                       </div>
                     )}
-                    <button className="btn btn-primary" onClick={uploadDrive} disabled={uploading || !videoFile}>
-                      {uploading ? <><span className="spinner"/> Uploading {uploadProgress}%...</> : <><FiUpload size={15}/> Upload to Drive</>}
+
+                    <button className="btn btn-primary" onClick={uploadDrive} disabled={uploading || !videoFile || !newTitle.trim()}>
+                      {uploading
+                        ? <><span className="spinner"/> Uploading {uploadProgress}%…</>
+                        : <><FiUpload size={15}/> Upload to Google Drive</>}
                     </button>
                   </>
                 )}

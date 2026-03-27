@@ -58,6 +58,21 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
+  // Re-authorize Google Drive — gets a fresh OAuth token (called when token is expired)
+  const refreshDriveToken = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        saveGDriveToken(credential.accessToken);
+        return true;
+      }
+    } catch { /* user cancelled */ }
+    return false;
+  };
+
   const logout = () => { clearGDriveToken(); return signOut(auth); };
 
   const fetchUserProfile = async (uid) => {
@@ -88,6 +103,7 @@ export const AuthProvider = ({ children }) => {
     loginWithGoogle,
     logout,
     fetchUserProfile,
+    refreshDriveToken,
     isTeacher: userProfile?.role === 'teacher',
     isStudent:  userProfile?.role === 'student'
   };

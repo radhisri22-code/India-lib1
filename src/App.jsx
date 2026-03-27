@@ -235,6 +235,8 @@ const AppRoutes = () => {
         <Route path="/teacher/courses/:courseId" element={<TeacherRoute><TeacherCourseManage /></TeacherRoute>} />
         <Route path="/teacher/live" element={<TeacherRoute><LiveClassroom isTeacher={true} /></TeacherRoute>} />
         <Route path="/teacher/live/:courseId" element={<TeacherRoute><LiveClassroom isTeacher={true} /></TeacherRoute>} />
+        {/* Teacher live room — always has isTeacher=true so controls always show */}
+        <Route path="/teacher/live/:courseId/:sessionId" element={<TeacherRoute><LiveClassroom isTeacher={true} /></TeacherRoute>} />
 
         {/* Student */}
         <Route path="/student" element={<StudentRoute><StudentDashboard /></StudentRoute>} />
