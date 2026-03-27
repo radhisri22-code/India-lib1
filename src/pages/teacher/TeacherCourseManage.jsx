@@ -13,13 +13,13 @@ import {
 import { db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
-import { uploadVideoToDrive, getGDriveToken } from '../../firebase/googleDrive';
+import { uploadVideoToDrive, isTokenFresh } from '../../firebase/googleDrive';
 import './TeacherCourseManage.css';
 
 const TeacherCourseManage = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { currentUser, userProfile, refreshDriveToken } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const { toast } = useToast();
 
   const [course, setCourse]     = useState(null);
@@ -49,7 +49,6 @@ const TeacherCourseManage = () => {
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({});
 
-  const [driveConnected, setDriveConnected] = useState(!!driveConnected);
   const fileInputRef = useRef();
 
   useEffect(() => { fetchAll(); }, [courseId]);
@@ -127,14 +126,10 @@ const TeacherCourseManage = () => {
   };
 
   // ─── Upload to Drive ──────────────────────────────────────────────────────
+  // Token is auto-refreshed inside uploadVideoToDrive when expired.
+  // The button click is a user gesture so the Google sign-in popup is allowed.
   const uploadDrive = async () => {
     if (!newTitle.trim() || !videoFile) { toast('Title and video required', 'error'); return; }
-
-    // Check token before starting — prompt reconnect if missing/expired
-    if (!driveConnected) {
-      toast('Google Drive not connected. Click "Connect Drive" first.', 'error'); return;
-    }
-
     setUploading(true); setUploadProgress(0);
     try {
       toast('Uploading to Google Drive… please wait', 'info');
@@ -152,21 +147,10 @@ const TeacherCourseManage = () => {
       setNewTitle(''); setVideoFile(null); setUploadProgress(0);
       toast('Video uploaded to Google Drive! ✅', 'success');
     } catch (err) {
-      if (err.message.includes('expired') || err.message.includes('session')) {
-        toast('Drive session expired — click "Connect Drive" to reconnect, then upload again.', 'error');
-      } else {
-        toast('Upload failed: ' + err.message, 'error');
-      }
+      toast('Upload failed: ' + err.message, 'error');
     } finally {
       setUploading(false);
     }
-  };
-
-  const connectDrive = async () => {
-    toast('Opening Google sign-in to connect Drive…', 'info');
-    const ok = await refreshDriveToken();
-    if (ok) { setDriveConnected(true); toast('Google Drive connected! You can now upload videos.', 'success'); }
-    else toast('Drive connection cancelled.', 'warning');
   };
 
   const removeContent = (index) => {
@@ -383,20 +367,10 @@ const TeacherCourseManage = () => {
                   </div>
                 ) : (
                   <>
-                    {/* Drive connection status */}
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0.625rem 0.875rem', background: driveConnected ? '#f0fdf4' : '#fef2f2', border: `1px solid ${driveConnected ? '#86efac' : '#fca5a5'}`, borderRadius:'var(--radius-sm)', marginBottom:'0.75rem' }}>
-                      <span style={{ fontSize:'0.82rem', fontWeight:600, color: driveConnected ? '#15803d' : '#dc2626' }}>
-                        {driveConnected ? '✅ Google Drive connected' : '❌ Google Drive not connected'}
-                      </span>
-                      <button className="btn btn-sm" style={{ background: '#4285f4', color:'white', fontSize:'0.78rem' }} onClick={connectDrive}>
-                        🔗 {driveConnected ? 'Reconnect Drive' : 'Connect Drive'}
-                      </button>
-                    </div>
-
                     <div className="file-drop" onClick={() => fileInputRef.current?.click()}>
                       {videoFile
-                        ? <><FiVideo size={22}/><span>{videoFile.name}</span><small>{(videoFile.size/1e6).toFixed(1)} MB — any size allowed</small></>
-                        : <><FiUpload size={22}/><span>Click to select video file</span><small>MP4, WebM, MOV — no size limit</small></>}
+                        ? <><FiVideo size={22}/><span>{videoFile.name}</span><small>{(videoFile.size/1e6).toFixed(1)} MB — no size limit</small></>
+                        : <><FiUpload size={22}/><span>Click to select video file</span><small>MP4, WebM, MOV — any size</small></>}
                       <input ref={fileInputRef} type="file" accept="video/*" hidden onChange={e => setVideoFile(e.target.files[0])} />
                     </div>
 
@@ -412,11 +386,16 @@ const TeacherCourseManage = () => {
                       </div>
                     )}
 
-                    <button className="btn btn-primary" onClick={uploadDrive} disabled={uploading || !videoFile || !newTitle.trim()}>
-                      {uploading
-                        ? <><span className="spinner"/> Uploading {uploadProgress}%…</>
-                        : <><FiUpload size={15}/> Upload to Google Drive</>}
-                    </button>
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                      <button className="btn btn-primary" onClick={uploadDrive} disabled={uploading || !videoFile || !newTitle.trim()} style={{ flex:1 }}>
+                        {uploading
+                          ? <><span className="spinner"/> Uploading {uploadProgress}%…</>
+                          : <><FiUpload size={15}/> Upload to Google Drive</>}
+                      </button>
+                      <span style={{ fontSize:'0.72rem', color: isTokenFresh() ? '#15803d' : '#f59e0b', fontWeight:600, flexShrink:0 }}>
+                        {isTokenFresh() ? '✅ Drive ready' : '⚡ Will reconnect on upload'}
+                      </span>
+                    </div>
                   </>
                 )}
               </div>

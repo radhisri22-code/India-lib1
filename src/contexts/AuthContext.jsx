@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { saveGDriveToken, clearGDriveToken } from '../firebase/googleDrive';
+import { saveGDriveToken, clearGDriveToken, setTokenRefresher } from '../firebase/googleDrive';
 
 const AuthContext = createContext();
 
@@ -18,60 +18,75 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser]   = useState(null);
-  const [userProfile, setUserProfile]   = useState(null);
-  const [loading, setLoading]           = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading,     setLoading]     = useState(true);
 
-  // Google Sign-In — creates or updates user profile
-  const loginWithGoogle = async (role = 'student') => {
+  // ─── Core: get a fresh Google OAuth token (with Drive scope) ─────────────────
+  // silent=true → no UI if user already authorized (used on page load)
+  // silent=false → shows Google account picker if needed (used on manual reconnect)
+  const _refreshDriveToken = async (email, silent) => {
     const provider = new GoogleAuthProvider();
-    // Allow any Google account (not just hackthetech)
     provider.addScope('https://www.googleapis.com/auth/drive.file');
-    const result     = await signInWithPopup(auth, provider);
-    // Save Google OAuth token for Drive REST API (no gapi / origin registration needed)
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) saveGDriveToken(credential.accessToken);
-    const ref    = doc(db, 'users', result.user.uid);
-    const snap   = await getDoc(ref);
-
-    if (!snap.exists()) {
-      // New user — create profile with chosen role
-      await setDoc(ref, {
-        uid:            result.user.uid,
-        email:          result.user.email,
-        displayName:    result.user.displayName,
-        photoURL:       result.user.photoURL || '',
-        role,
-        createdAt:      serverTimestamp(),
-        blockedUsers:   [],
-        enrolledCourses:[],
-        createdCourses: []
+    if (silent) {
+      provider.setCustomParameters({
+        prompt: 'none',                    // skip UI if already authorized
+        ...(email ? { login_hint: email } : {})
       });
-    } else {
-      // Existing user — always update role to what they selected
-      await updateDoc(ref, { role, photoURL: result.user.photoURL || '' });
     }
-
-    // Refresh local profile immediately
-    const updated = await getDoc(ref);
-    setUserProfile(updated.data());
-    return result;
-  };
-
-  // Re-authorize Google Drive — gets a fresh OAuth token (called when token is expired)
-  const refreshDriveToken = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/drive.file');
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result     = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         saveGDriveToken(credential.accessToken);
         return true;
       }
-    } catch { /* user cancelled */ }
+    } catch { /* silent fail */ }
     return false;
   };
+
+  // ─── Register with googleDrive.js so uploads auto-refresh the token ──────────
+  // This callback is called automatically inside uploadVideoToDrive when the
+  // token is missing or expired — triggered by the upload button user-gesture
+  // so the browser always allows the popup.
+  useEffect(() => {
+    setTokenRefresher(() => _refreshDriveToken(currentUser?.email, false));
+  }, [currentUser]); // eslint-disable-line
+
+  // ─── Google Sign-In ───────────────────────────────────────────────────────────
+  const loginWithGoogle = async (role = 'student') => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    const result     = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) saveGDriveToken(credential.accessToken);
+
+    const ref  = doc(db, 'users', result.user.uid);
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        uid:             result.user.uid,
+        email:           result.user.email,
+        displayName:     result.user.displayName,
+        photoURL:        result.user.photoURL || '',
+        role,
+        createdAt:       serverTimestamp(),
+        blockedUsers:    [],
+        enrolledCourses: [],
+        createdCourses:  []
+      });
+    } else {
+      await updateDoc(ref, { role, photoURL: result.user.photoURL || '' });
+    }
+
+    const updated = await getDoc(ref);
+    setUserProfile(updated.data());
+    return result;
+  };
+
+  // ─── Re-authorize Drive (manual reconnect button or auto-retry) ──────────────
+  const refreshDriveToken = () => _refreshDriveToken(currentUser?.email, false);
 
   const logout = () => { clearGDriveToken(); return signOut(auth); };
 
@@ -89,13 +104,17 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user);
       if (user) {
         await fetchUserProfile(user.uid);
+        // Best-effort silent token refresh on every page load.
+        // prompt:'none' means Google skips UI if user already authorized.
+        // If blocked by browser, the upload button click handles it instead.
+        _refreshDriveToken(user.email, true).catch(() => {});
       } else {
         setUserProfile(null);
       }
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, []); // eslint-disable-line
 
   const value = {
     currentUser,
