@@ -214,7 +214,9 @@ const NotFound = () => (
 // ─── App Routes ────────────────────────────────────────────────────────────────
 
 const AppRoutes = () => {
-  const isLivePage = window.location.pathname.startsWith('/live');
+  const path = window.location.pathname;
+  // Hide header on any live room page (student /live/x/y OR teacher /teacher/live/x/y)
+  const isLivePage = /^\/(teacher\/)?live\/.+\/.+/.test(path);
 
   return (
     <>

@@ -19,7 +19,7 @@ import './TeacherCourseManage.css';
 const TeacherCourseManage = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, refreshDriveToken } = useAuth();
   const { toast } = useToast();
 
   const [course, setCourse]     = useState(null);
@@ -126,13 +126,23 @@ const TeacherCourseManage = () => {
   };
 
   // ─── Upload to Drive ──────────────────────────────────────────────────────
-  // Token is auto-refreshed inside uploadVideoToDrive when expired.
-  // The button click is a user gesture so the Google sign-in popup is allowed.
   const uploadDrive = async () => {
     if (!newTitle.trim() || !videoFile) { toast('Title and video required', 'error'); return; }
+
+    // Token check FIRST — while still inside the click-event gesture window.
+    // signInWithPopup must be called close to the user gesture to avoid popup blocking.
+    if (!isTokenFresh()) {
+      toast('Reconnecting to Google Drive…', 'info');
+      const ok = await refreshDriveToken(); // direct signInWithPopup — gesture still valid
+      if (!ok) {
+        toast('Google Drive connection failed. Try signing out and back in.', 'error');
+        return;
+      }
+      toast('Drive reconnected! Starting upload…', 'success');
+    }
+
     setUploading(true); setUploadProgress(0);
     try {
-      toast('Uploading to Google Drive… please wait', 'info');
       const result = await uploadVideoToDrive(
         videoFile,
         `${currentUser.uid}_${Date.now()}_${videoFile.name}`,

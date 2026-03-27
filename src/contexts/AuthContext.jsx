@@ -104,10 +104,6 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user);
       if (user) {
         await fetchUserProfile(user.uid);
-        // Best-effort silent token refresh on every page load.
-        // prompt:'none' means Google skips UI if user already authorized.
-        // If blocked by browser, the upload button click handles it instead.
-        _refreshDriveToken(user.email, true).catch(() => {});
       } else {
         setUserProfile(null);
       }

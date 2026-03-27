@@ -71,7 +71,9 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
   const recordedChunks   = useRef([]);
   const recordingTimer   = useRef(null);
   const chatBottomRef    = useRef(null);
-  const mediaStarted     = useRef(false);  // guard for isTeacher timing fix
+  const mediaStarted     = useRef(false);   // guard for isTeacher timing fix
+  const localStreamRef   = useRef(null);    // mirrors state — avoids stale closures
+  const screenStreamRef  = useRef(null);    // mirrors state — avoids stale closures
 
   const chatRef    = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}/chat`)    : null;
   const viewersRef = sessionId ? dbRef(rtdb, `liveSessions/${sessionId}/viewers`) : null;
@@ -89,15 +91,17 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
     return () => stopAll();
   }, []); // eslint-disable-line
 
-  // Assign local camera stream to video element
+  // Assign local camera stream to video element + keep ref in sync
   useEffect(() => {
+    localStreamRef.current = localStream;
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
-  // Assign screen stream to video element
+  // Assign screen stream to video element + keep ref in sync
   useEffect(() => {
+    screenStreamRef.current = screenStream;
     if (screenStream && screenVideoRef.current) {
       screenVideoRef.current.srcObject = screenStream;
     }
@@ -351,9 +355,10 @@ const LiveClassroom = ({ isTeacher: isTeacherMode = false }) => {
     toast(next ? 'Chat muted for students' : 'Chat unmuted', 'info');
   };
 
+  // Uses refs so cleanup always stops the CURRENT streams, not stale closures
   const stopAll = () => {
-    localStream?.getTracks().forEach(t => t.stop());
-    screenStream?.getTracks().forEach(t => t.stop());
+    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    screenStreamRef.current?.getTracks().forEach(t => t.stop());
     clearInterval(recordingTimer.current);
   };
 
