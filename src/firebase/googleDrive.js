@@ -80,6 +80,11 @@ const importSAKey = async () => {
 const getServiceAccountToken = async () => {
   if (_saToken && Date.now() < _saTokenExpiry) return _saToken;
 
+  // crypto.subtle only works on HTTPS (secure context)
+  if (!crypto?.subtle) {
+    throw new Error('HTTPS required for service account. Use HTTPS or re-authorize as admin at /admin/setup.');
+  }
+
   const now = Math.floor(Date.now() / 1000);
   const header  = { alg: 'RS256', typ: 'JWT' };
   const payload = { iss: SA_EMAIL, scope: SA_SCOPE, aud: SA_TOKEN_URI, iat: now, exp: now + 3600 };
@@ -188,17 +193,18 @@ const drivePost = async (url, body, extraHeaders = {}) => {
 // ─── Get or create upload folder ──────────────────────────────────────────────
 const getOrCreateFolder = async () => {
   if (cachedFolderId) return cachedFolderId;
-  const q   = encodeURIComponent(
+  const q = encodeURIComponent(
     `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
   );
+  // includeItemsFromAllDrives + supportsAllDrives needed for service account to see shared folders
   const res  = await driveGet(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive&includeItemsFromAllDrives=true&supportsAllDrives=true`
   );
   const data = await res.json();
   if (data.files?.length > 0) { cachedFolderId = data.files[0].id; return cachedFolderId; }
-  // Create folder
+  // Create folder (owned by service account — files will be uploaded here)
   const cr   = await drivePost(
-    'https://www.googleapis.com/drive/v3/files?fields=id',
+    'https://www.googleapis.com/drive/v3/files?fields=id&supportsAllDrives=true',
     JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
     { 'Content-Type': 'application/json' }
   );
@@ -232,7 +238,7 @@ export const uploadVideoToDrive = async (file, fileName, onProgress) => {
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST',
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink');
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=true');
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
