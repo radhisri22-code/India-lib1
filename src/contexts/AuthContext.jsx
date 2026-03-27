@@ -7,7 +7,10 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { saveGDriveToken, clearGDriveToken, setTokenRefresher } from '../firebase/googleDrive';
+import {
+  saveGDriveToken, clearGDriveToken, setTokenRefresher,
+  saveAdminDriveToken, ADMIN_EMAIL
+} from '../firebase/googleDrive';
 
 const AuthContext = createContext();
 
@@ -59,7 +62,13 @@ export const AuthProvider = ({ children }) => {
     provider.addScope('https://www.googleapis.com/auth/drive.file');
     const result     = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) saveGDriveToken(credential.accessToken);
+    if (credential?.accessToken) {
+      saveGDriveToken(credential.accessToken);
+      // If admin account logs in, save token to Firestore for all teacher uploads
+      if (result.user.email === ADMIN_EMAIL) {
+        await saveAdminDriveToken(credential.accessToken);
+      }
+    }
 
     const ref  = doc(db, 'users', result.user.uid);
     const snap = await getDoc(ref);
@@ -120,7 +129,8 @@ export const AuthProvider = ({ children }) => {
     fetchUserProfile,
     refreshDriveToken,
     isTeacher: userProfile?.role === 'teacher',
-    isStudent:  userProfile?.role === 'student'
+    isStudent:  userProfile?.role === 'student',
+    isAdmin:   currentUser?.email === ADMIN_EMAIL
   };
 
   return (

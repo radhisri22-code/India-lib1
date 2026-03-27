@@ -13,6 +13,7 @@ import CourseBrowser from './pages/student/CourseBrowser';
 import CourseDetail from './pages/CourseDetail';
 import LiveClassroom from './pages/teacher/LiveClassroom';
 import SetupCheck from './pages/SetupCheck';
+import AdminSetup from './pages/admin/AdminSetup';
 import LiveNotification from './components/shared/LiveNotification';
 import { db } from './firebase/config';
 import {
@@ -251,6 +252,9 @@ const AppRoutes = () => {
 
         {/* Setup Check */}
         <Route path="/setup-check" element={<SetupCheck />} />
+
+        {/* Admin */}
+        <Route path="/admin/setup" element={<AdminSetup />} />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
