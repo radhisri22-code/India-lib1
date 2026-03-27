@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './components/shared/Toast';
@@ -214,9 +214,9 @@ const NotFound = () => (
 // ─── App Routes ────────────────────────────────────────────────────────────────
 
 const AppRoutes = () => {
-  const path = window.location.pathname;
-  // Hide header on any live room page (student /live/x/y OR teacher /teacher/live/x/y)
-  const isLivePage = /^\/(teacher\/)?live\/.+\/.+/.test(path);
+  const location = useLocation();
+  // Hide header when inside an active live room (has both courseId AND sessionId)
+  const isLivePage = /^\/(teacher\/)?live\/[^/]+\/[^/]+/.test(location.pathname);
 
   return (
     <>

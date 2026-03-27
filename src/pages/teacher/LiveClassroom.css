@@ -152,13 +152,14 @@
 .ctrl-btn.end-btn:hover { background: #b91c1c !important; }
 .ctrl-btn.end-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* Live Room */
+/* Live Room — fixed so it always fills the whole screen even if header renders */
 .live-room {
   display: flex;
-  height: 100vh;
+  position: fixed;
+  inset: 0;
   background: #0a0a0f;
   overflow: hidden;
-  position: relative;
+  z-index: 500;
 }
 
 .live-main {

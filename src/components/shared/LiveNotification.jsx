@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { onValue, ref as dbRef, off } from 'firebase/database';
 import { FiPlay, FiX, FiUsers } from 'react-icons/fi';
 import { rtdb } from '../../firebase/config';
@@ -12,7 +12,8 @@ import './LiveNotification.css';
  */
 const LiveNotification = () => {
   const { userProfile } = useAuth();
-  const [activeLive, setActiveLive]       = useState(null); // { sessionId, courseId, teacherName, title, viewers }
+  const location = useLocation();
+  const [activeLive, setActiveLive]       = useState(null);
   const [dismissed, setDismissed]         = useState(false);
   const [prevSessionId, setPrevSessionId] = useState(null);
 
@@ -46,7 +47,7 @@ const LiveNotification = () => {
   if (!activeLive || dismissed) return null;
 
   // Don't show if already on the live page
-  if (window.location.pathname.includes('/live/')) return null;
+  if (/\/(teacher\/)?live\//.test(location.pathname)) return null;
 
   return (
     <div className="live-notification">
