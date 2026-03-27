@@ -1,150 +1,136 @@
 /**
- * Google Drive Storage
- * Primary storage for all videos & recordings
- * Uses hackthetech0000@gmail.com Google account
- * Client ID: 271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com
- * Note: Client Secret is NOT used in frontend (browser OAuth only needs Client ID)
+ * Google Drive – pure REST API approach (no gapi, no origin registration needed)
+ * Token comes from Firebase Google Sign-In (stored by AuthContext)
  */
 
-// Hardcoded Google OAuth Client ID (safe to expose in frontend)
-const GOOGLE_CLIENT_ID = "271282953431-2escb8h2dfg6ib60qtu502r8hmht94sf.apps.googleusercontent.com";
-const GOOGLE_API_KEY   = "AIzaSyBXytzZdLGxh153rnbHRfIR7zMFeVdI7Ns";
-
+const TOKEN_KEY  = 'edulive_gd_token';
 const FOLDER_NAME = 'EduLive-Videos';
-const SCOPE       = 'https://www.googleapis.com/auth/drive.file';
-const DISCOVERY   = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+let cachedFolderId = null;
 
-let gapiReady     = false;
-let folderId      = null;
-let initPromise   = null;
-
-// ─── Load Google API script ───────────────────────────────────────────────────
-export const initGoogleDrive = () => {
-  if (initPromise) return initPromise;
-  initPromise = new Promise((resolve, reject) => {
-    if (typeof window.gapi !== 'undefined' && gapiReady) { resolve(); return; }
-
-    const script = document.createElement('script');
-    script.src   = 'https://apis.google.com/js/api.js';
-    script.onload = () => {
-      window.gapi.load('client:auth2', async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey:        GOOGLE_API_KEY,
-            clientId:      GOOGLE_CLIENT_ID,
-            discoveryDocs: [DISCOVERY],
-            scope:         SCOPE
-          });
-          gapiReady = true;
-          resolve();
-        } catch (err) {
-          reject(new Error('Google Drive init failed: ' + (err.details || err.message)));
-        }
-      });
-    };
-    script.onerror = () => reject(new Error('Failed to load Google API'));
-    document.head.appendChild(script);
-  });
-  return initPromise;
+// ─── Token helpers (called by AuthContext after sign-in) ──────────────────────
+export const saveGDriveToken = (token) => {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
 };
 
-// ─── Sign in to Google Drive ──────────────────────────────────────────────────
-export const signInToDrive = async () => {
-  await initGoogleDrive();
-  const gauth = window.gapi.auth2.getAuthInstance();
-  if (!gauth.isSignedIn.get()) {
-    await gauth.signIn({ login_hint: 'hackthetech0000@gmail.com' });
-  } else {
-    // Grant Drive scope if not already granted
-    const user = gauth.currentUser.get();
-    if (!user.hasGrantedScopes(SCOPE)) {
-      await user.grant({ scope: SCOPE });
-    }
-  }
-  return window.gapi.auth.getToken()?.access_token;
+export const getGDriveToken = () => localStorage.getItem(TOKEN_KEY);
+
+export const clearGDriveToken = () => localStorage.removeItem(TOKEN_KEY);
+
+// ─── Authenticated fetch wrapper ──────────────────────────────────────────────
+const driveGet = async (url) => {
+  const token = getGDriveToken();
+  if (!token) throw new Error('Not connected to Google Drive. Please sign out and sign in again.');
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) { clearGDriveToken(); throw new Error('Drive session expired. Please sign out and sign in again.'); }
+  return res;
 };
 
-export const isDriveReady = () => gapiReady && window.gapi?.auth2?.getAuthInstance()?.isSignedIn.get();
+const drivePost = async (url, body, extraHeaders = {}) => {
+  const token = getGDriveToken();
+  if (!token) throw new Error('Not connected to Google Drive. Please sign out and sign in again.');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, ...extraHeaders },
+    body
+  });
+  if (res.status === 401) { clearGDriveToken(); throw new Error('Drive session expired. Please sign out and sign in again.'); }
+  return res;
+};
 
-// ─── Get or create EduLive folder in Drive ────────────────────────────────────
-const getFolder = async () => {
-  if (folderId) return folderId;
-  const res = await window.gapi.client.drive.files.list({
-    q: `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id)'
-  });
-  if (res.result.files.length > 0) {
-    folderId = res.result.files[0].id;
-    return folderId;
+// ─── Get or create EduLive-Videos folder ─────────────────────────────────────
+const getOrCreateFolder = async () => {
+  if (cachedFolderId) return cachedFolderId;
+
+  const q = encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await driveGet(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  const data = await res.json();
+
+  if (data.files?.length > 0) {
+    cachedFolderId = data.files[0].id;
+    return cachedFolderId;
   }
-  const folder = await window.gapi.client.drive.files.create({
-    resource: { name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' },
-    fields: 'id'
-  });
-  folderId = folder.result.id;
-  return folderId;
+
+  const createRes = await drivePost(
+    'https://www.googleapis.com/drive/v3/files?fields=id',
+    JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+    { 'Content-Type': 'application/json' }
+  );
+  const created = await createRes.json();
+  cachedFolderId = created.id;
+  return cachedFolderId;
 };
 
 // ─── Make file publicly readable ─────────────────────────────────────────────
 const makePublic = async (fileId) => {
-  const token = window.gapi.auth.getToken()?.access_token;
-  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role: 'reader', type: 'anyone' })
-  });
+  try {
+    await drivePost(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+      JSON.stringify({ role: 'reader', type: 'anyone' }),
+      { 'Content-Type': 'application/json' }
+    );
+  } catch { /* ignore permission errors silently */ }
 };
 
-// ─── Upload any File to Drive ─────────────────────────────────────────────────
-export const uploadVideoToDrive = async (file, fileName, onProgress) => {
-  await signInToDrive();
-  const folder = await getFolder();
-  const token  = window.gapi.auth.getToken()?.access_token;
+// ─── Upload File to Drive (multipart, no size limit, with progress) ───────────
+export const uploadVideoToDrive = (file, fileName, onProgress) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const token = getGDriveToken();
+      if (!token) throw new Error('Not connected to Google Drive. Please sign out and sign in again.');
 
-  const metadata = { name: fileName, parents: [folder] };
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
+      const folderId = await getOrCreateFolder();
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink');
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      const metadata = { name: fileName, parents: [folderId] };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', file); // no size restriction
 
-    if (onProgress) {
-      xhr.upload.onprogress = e => {
-        if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink');
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
       };
-    }
 
-    xhr.onload = async () => {
-      if (xhr.status === 200) {
-        const res = JSON.parse(xhr.responseText);
-        await makePublic(res.id);
-        resolve({
-          fileId:     res.id,
-          fileName:   res.name,
-          embedLink:  `https://drive.google.com/file/d/${res.id}/preview`,
-          directLink: `https://drive.google.com/uc?export=download&id=${res.id}`,
-          viewLink:   res.webViewLink
-        });
-      } else {
-        reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText}`));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Network error during Drive upload'));
-    xhr.send(form);
+      xhr.onload = async () => {
+        if (xhr.status === 200 || xhr.status === 201) {
+          const res = JSON.parse(xhr.responseText);
+          await makePublic(res.id);
+          resolve({
+            fileId:     res.id,
+            fileName:   res.name,
+            embedLink:  `https://drive.google.com/file/d/${res.id}/preview`,
+            directLink: `https://drive.google.com/uc?export=download&id=${res.id}`,
+            viewLink:   res.webViewLink
+          });
+        } else if (xhr.status === 401) {
+          clearGDriveToken();
+          reject(new Error('Drive session expired. Please sign out and sign in again.'));
+        } else {
+          reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload. Check your connection.'));
+      xhr.send(form);
+    } catch (err) {
+      reject(err);
+    }
   });
 };
 
-// ─── Upload Blob (for live recordings) ───────────────────────────────────────
-export const uploadBlobToDrive = async (blob, fileName, onProgress) => {
+// ─── Upload Blob (recordings) ─────────────────────────────────────────────────
+export const uploadBlobToDrive = (blob, fileName, onProgress) => {
   const file = new File([blob], fileName, { type: blob.type || 'video/webm' });
   return uploadVideoToDrive(file, fileName, onProgress);
 };
 
-// ─── Delete a file from Drive ─────────────────────────────────────────────────
+// ─── Delete file ──────────────────────────────────────────────────────────────
 export const deleteFromDrive = async (fileId) => {
-  await signInToDrive();
-  await window.gapi.client.drive.files.delete({ fileId });
+  const token = getGDriveToken();
+  if (!token) return;
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
 };

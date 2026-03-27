@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
+import { saveGDriveToken, clearGDriveToken } from '../firebase/googleDrive';
 
 const AuthContext = createContext();
 
@@ -26,7 +27,10 @@ export const AuthProvider = ({ children }) => {
     const provider = new GoogleAuthProvider();
     // Allow any Google account (not just hackthetech)
     provider.addScope('https://www.googleapis.com/auth/drive.file');
-    const result = await signInWithPopup(auth, provider);
+    const result     = await signInWithPopup(auth, provider);
+    // Save Google OAuth token for Drive REST API (no gapi / origin registration needed)
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) saveGDriveToken(credential.accessToken);
     const ref    = doc(db, 'users', result.user.uid);
     const snap   = await getDoc(ref);
 
@@ -54,7 +58,7 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
-  const logout = () => signOut(auth);
+  const logout = () => { clearGDriveToken(); return signOut(auth); };
 
   const fetchUserProfile = async (uid) => {
     try {
