@@ -72,6 +72,17 @@ const Login = () => {
           <p className="auth-note">
             First time? Just sign in — your account is created automatically.
           </p>
+          <p className="auth-note" style={{ marginTop: '0.5rem' }}>
+            Forgot your Google password?{' '}
+            <a
+              href="https://accounts.google.com/signin/recovery"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: 'var(--primary)', fontWeight: 600 }}
+            >
+              Reset it here →
+            </a>
+          </p>
         </div>
       </div>
 

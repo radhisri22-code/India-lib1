@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FiLogOut, FiUser, FiMenu, FiX, FiBook, FiVideo, FiHome } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from './Toast';
+import NotificationBell from './NotificationBell';
 import './Header.css';
 
 const Header = () => {
@@ -61,6 +62,7 @@ const Header = () => {
             </nav>
 
             <div className="header-actions">
+              <NotificationBell />
               <div className="user-info">
                 <div className="avatar avatar-sm" style={{ background: isTeacher ? 'var(--primary)' : 'var(--secondary)' }}>
                   {userProfile?.photoURL

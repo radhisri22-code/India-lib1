@@ -12,6 +12,11 @@ import {
 import { db, rtdb } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/shared/Toast';
+import {
+  sendEnrollmentEmail,
+  notifyStudentEnrollment,
+  notifyTeacherEnrollment
+} from '../firebase/notifications';
 import CommentSection from '../components/shared/CommentSection';
 import Notepad from '../components/shared/Notepad';
 import './CourseDetail.css';
@@ -142,13 +147,30 @@ const CourseDetail = () => {
     try {
       await updateDoc(doc(db, 'courses', courseId), { enrolledCount: increment(1) });
       await updateDoc(doc(db, 'users', currentUser.uid), { enrolledCourses: arrayUnion(courseId) });
-      // If coupon was used, increment its usedCount
       if (couponId) {
         await updateDoc(doc(db, `courses/${courseId}/coupons`, couponId), { usedCount: increment(1) });
       }
       await fetchUserProfile(currentUser.uid);
       setEnrollModal(false);
       toast('Enrolled successfully! 🎉', 'success');
+
+      // Fire notifications + email (non-blocking)
+      const studentName = userProfile?.displayName || currentUser.email;
+      const courseName  = course?.title || 'this course';
+      const teacherId   = course?.teacherId;
+      const teacherName = course?.teacherName || '';
+
+      Promise.allSettled([
+        notifyStudentEnrollment({ studentId: currentUser.uid, courseName, courseId }),
+        teacherId && notifyTeacherEnrollment({ teacherId, studentName, courseName, courseId }),
+        sendEnrollmentEmail({
+          studentEmail: currentUser.email,
+          studentName,
+          courseName,
+          teacherName,
+          courseId
+        })
+      ]);
     } catch (err) {
       toast('Enrollment failed: ' + err.message, 'error');
     } finally {
