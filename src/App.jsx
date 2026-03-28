@@ -29,8 +29,10 @@ const PrivateRoute = ({ children }) => {
 };
 
 const TeacherRoute = ({ children }) => {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isAdmin } = useAuth();
   if (!currentUser) return <Navigate to="/login" replace />;
+  // Admin always has teacher access
+  if (isAdmin) return children;
   if (userProfile && userProfile.role !== 'teacher') return <Navigate to="/student" replace />;
   return children;
 };
@@ -51,9 +53,9 @@ const PublicOnlyRoute = ({ children }) => {
 };
 
 const RootRedirect = () => {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isAdmin, isTeacher } = useAuth();
   if (!currentUser) return <Navigate to="/login" replace />;
-  return <Navigate to={userProfile?.role === 'teacher' ? '/teacher' : '/student'} replace />;
+  return <Navigate to={isAdmin || isTeacher ? '/teacher' : '/student'} replace />;
 };
 
 // ─── Teacher Courses Page ──────────────────────────────────────────────────────

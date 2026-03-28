@@ -62,9 +62,12 @@ export const AuthProvider = ({ children }) => {
     provider.addScope('https://www.googleapis.com/auth/drive.file');
     const result     = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
+
+    // Admin account always logs in as teacher and saves Drive token
+    const effectiveRole = result.user.email === ADMIN_EMAIL ? 'teacher' : role;
+
     if (credential?.accessToken) {
       saveGDriveToken(credential.accessToken);
-      // If admin account logs in, save token to Firestore for all teacher uploads
       if (result.user.email === ADMIN_EMAIL) {
         await saveAdminDriveToken(credential.accessToken);
       }
@@ -79,14 +82,14 @@ export const AuthProvider = ({ children }) => {
         email:           result.user.email,
         displayName:     result.user.displayName,
         photoURL:        result.user.photoURL || '',
-        role,
+        role:            effectiveRole,
         createdAt:       serverTimestamp(),
         blockedUsers:    [],
         enrolledCourses: [],
         createdCourses:  []
       });
     } else {
-      await updateDoc(ref, { role, photoURL: result.user.photoURL || '' });
+      await updateDoc(ref, { role: effectiveRole, photoURL: result.user.photoURL || '' });
     }
 
     const updated = await getDoc(ref);
@@ -128,9 +131,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     fetchUserProfile,
     refreshDriveToken,
-    isTeacher: userProfile?.role === 'teacher',
-    isStudent:  userProfile?.role === 'student',
-    isAdmin:   currentUser?.email === ADMIN_EMAIL
+    isAdmin:   currentUser?.email === ADMIN_EMAIL,
+    isTeacher: userProfile?.role === 'teacher' || currentUser?.email === ADMIN_EMAIL,
+    isStudent:  userProfile?.role === 'student' && currentUser?.email !== ADMIN_EMAIL
   };
 
   return (
