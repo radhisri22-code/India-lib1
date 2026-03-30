@@ -7,7 +7,7 @@ import NotificationBell from './NotificationBell';
 import './Header.css';
 
 const Header = () => {
-  const { currentUser, userProfile, logout, isTeacher } = useAuth();
+  const { currentUser, userProfile, logout, isTeacher, isAdmin, adminDriveReady, refreshDriveToken } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,6 +62,27 @@ const Header = () => {
             </nav>
 
             <div className="header-actions">
+              {isAdmin && (
+                <button
+                  title={adminDriveReady ? 'Drive connected' : 'Drive token expired — click to refresh'}
+                  onClick={adminDriveReady ? undefined : refreshDriveToken}
+                  style={{
+                    background: 'none', border: 'none', cursor: adminDriveReady ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    fontSize: '0.72rem', fontWeight: 700,
+                    color: adminDriveReady ? '#22c55e' : '#ef4444', padding: '0.25rem 0.5rem',
+                    borderRadius: 6,
+                    background: adminDriveReady ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+                  }}
+                >
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: adminDriveReady ? '#22c55e' : '#ef4444',
+                    display: 'inline-block'
+                  }} />
+                  {adminDriveReady ? 'Drive OK' : 'Drive — Click Refresh'}
+                </button>
+              )}
               <NotificationBell />
               <div className="user-info">
                 <div className="avatar avatar-sm" style={{ background: isTeacher ? 'var(--primary)' : 'var(--secondary)' }}>

@@ -21,54 +21,41 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [loading,     setLoading]     = useState(true);
+  const [currentUser,    setCurrentUser]    = useState(null);
+  const [userProfile,    setUserProfile]    = useState(null);
+  const [loading,        setLoading]        = useState(true);
+  const [adminDriveReady,setAdminDriveReady]= useState(false);
 
-  // ─── Core: get a fresh Google OAuth token (with Drive scope) ─────────────────
-  // silent=true → no UI if user already authorized (used on page load)
-  // silent=false → shows Google account picker if needed (used on manual reconnect)
-  const _refreshDriveToken = async (email, silent) => {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/drive.file');
-    if (silent) {
-      provider.setCustomParameters({
-        prompt: 'none',                    // skip UI if already authorized
-        ...(email ? { login_hint: email } : {})
-      });
-    }
+  // ─── Silent Drive token refresh (no popup, no UI) ────────────────────────────
+  const silentRefreshDrive = async (email) => {
     try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.setCustomParameters({ prompt: 'none', login_hint: email });
       const result     = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         saveGDriveToken(credential.accessToken);
+        await saveAdminDriveToken(credential.accessToken);
+        setAdminDriveReady(true);
         return true;
       }
     } catch { /* silent fail */ }
     return false;
   };
 
-  // ─── Auto-refresh admin Drive token every 50 min (silent, no popup) ──────────
+  // ─── Auto-refresh admin Drive token every 50 min ──────────────────────────────
   useEffect(() => {
     if (!currentUser || currentUser.email !== ADMIN_EMAIL) return;
 
-    const silentRefresh = async () => {
-      try {
-        const provider = new GoogleAuthProvider();
-        provider.addScope('https://www.googleapis.com/auth/drive.file');
-        provider.setCustomParameters({ prompt: 'none', login_hint: ADMIN_EMAIL });
-        const result     = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential?.accessToken) {
-          saveGDriveToken(credential.accessToken);
-          await saveAdminDriveToken(credential.accessToken);
-        }
-      } catch { /* silent fail — user will see error only if upload attempted */ }
-    };
-
-    silentRefresh(); // refresh immediately on login
-    const timer = setInterval(silentRefresh, 50 * 60 * 1000); // every 50 min
+    silentRefreshDrive(ADMIN_EMAIL); // immediately on login/app open
+    const timer = setInterval(() => silentRefreshDrive(ADMIN_EMAIL), 50 * 60 * 1000);
     return () => clearInterval(timer);
+  }, [currentUser?.uid]); // eslint-disable-line
+
+  // ─── Register upload fallback refresher ───────────────────────────────────────
+  useEffect(() => {
+    setTokenRefresher(() => silentRefreshDrive(currentUser?.email || ADMIN_EMAIL));
   }, [currentUser?.uid]); // eslint-disable-line
 
   // ─── Google Sign-In ───────────────────────────────────────────────────────────
@@ -112,8 +99,25 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
-  // ─── Re-authorize Drive (manual reconnect button or auto-retry) ──────────────
-  const refreshDriveToken = () => _refreshDriveToken(currentUser?.email, false);
+  // ─── Manual Drive reconnect (shows Google popup) ─────────────────────────────
+  const refreshDriveToken = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    provider.setCustomParameters({ login_hint: currentUser?.email || ADMIN_EMAIL, prompt: 'consent' });
+    try {
+      const result     = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        saveGDriveToken(credential.accessToken);
+        if (result.user.email === ADMIN_EMAIL) {
+          await saveAdminDriveToken(credential.accessToken);
+          setAdminDriveReady(true);
+        }
+        return true;
+      }
+    } catch { /* ignore */ }
+    return false;
+  };
 
   const logout = () => { clearGDriveToken(); return signOut(auth); };
 
@@ -146,9 +150,10 @@ export const AuthProvider = ({ children }) => {
     logout,
     fetchUserProfile,
     refreshDriveToken,
-    isAdmin:   currentUser?.email === ADMIN_EMAIL,
-    isTeacher: userProfile?.role === 'teacher' || currentUser?.email === ADMIN_EMAIL,
-    isStudent:  userProfile?.role === 'student' && currentUser?.email !== ADMIN_EMAIL
+    isAdmin:        currentUser?.email === ADMIN_EMAIL,
+    isTeacher:      userProfile?.role === 'teacher' || currentUser?.email === ADMIN_EMAIL,
+    isStudent:      userProfile?.role === 'student' && currentUser?.email !== ADMIN_EMAIL,
+    adminDriveReady
   };
 
   return (
