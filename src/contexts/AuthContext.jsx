@@ -48,13 +48,28 @@ export const AuthProvider = ({ children }) => {
     return false;
   };
 
-  // ─── Register with googleDrive.js so uploads auto-refresh the token ──────────
-  // This callback is called automatically inside uploadVideoToDrive when the
-  // token is missing or expired — triggered by the upload button user-gesture
-  // so the browser always allows the popup.
+  // ─── Auto-refresh admin Drive token every 50 min (silent, no popup) ──────────
   useEffect(() => {
-    setTokenRefresher(() => _refreshDriveToken(currentUser?.email, false));
-  }, [currentUser]); // eslint-disable-line
+    if (!currentUser || currentUser.email !== ADMIN_EMAIL) return;
+
+    const silentRefresh = async () => {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.addScope('https://www.googleapis.com/auth/drive.file');
+        provider.setCustomParameters({ prompt: 'none', login_hint: ADMIN_EMAIL });
+        const result     = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          saveGDriveToken(credential.accessToken);
+          await saveAdminDriveToken(credential.accessToken);
+        }
+      } catch { /* silent fail — user will see error only if upload attempted */ }
+    };
+
+    silentRefresh(); // refresh immediately on login
+    const timer = setInterval(silentRefresh, 50 * 60 * 1000); // every 50 min
+    return () => clearInterval(timer);
+  }, [currentUser?.uid]); // eslint-disable-line
 
   // ─── Google Sign-In ───────────────────────────────────────────────────────────
   const loginWithGoogle = async (role = 'student') => {

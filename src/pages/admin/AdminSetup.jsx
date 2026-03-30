@@ -5,24 +5,41 @@ import { auth } from '../../firebase/config';
 import {
   saveAdminDriveToken,
   getAdminDriveToken,
+  getAdminTokenExpiry,
   isAdminTokenFresh,
   ADMIN_EMAIL
 } from '../../firebase/googleDrive';
 import { useAuth } from '../../contexts/AuthContext';
 
+const fmtExpiry = (expiry) => {
+  if (!expiry) return '';
+  const ms   = expiry - Date.now();
+  if (ms <= 0) return 'Expired';
+  const mins = Math.floor(ms / 60000);
+  return `Expires in ${mins} min`;
+};
+
 const AdminSetup = () => {
   const { currentUser, isAdmin } = useAuth();
-  const [tokenStatus, setTokenStatus] = useState('checking'); // 'checking' | 'fresh' | 'expired'
+  const [tokenStatus, setTokenStatus] = useState('checking');
+  const [expiry,      setExpiry]      = useState(0);
   const [reauthing,   setReauthing]   = useState(false);
   const [message,     setMessage]     = useState('');
 
   useEffect(() => {
     const check = async () => {
-      if (isAdminTokenFresh()) { setTokenStatus('fresh'); return; }
+      if (isAdminTokenFresh()) {
+        setTokenStatus('fresh');
+        setExpiry(getAdminTokenExpiry());
+        return;
+      }
       const t = await getAdminDriveToken();
       setTokenStatus(t ? 'fresh' : 'expired');
+      setExpiry(getAdminTokenExpiry());
     };
     check();
+    const timer = setInterval(check, 60000); // update every minute
+    return () => clearInterval(timer);
   }, []);
 
   if (!currentUser) return <Navigate to="/login" replace />;
@@ -40,7 +57,8 @@ const AdminSetup = () => {
       if (credential?.accessToken) {
         await saveAdminDriveToken(credential.accessToken);
         setTokenStatus('fresh');
-        setMessage('Drive re-authorized successfully! All teacher uploads will now use this account.');
+        setExpiry(Date.now() + 55 * 60 * 1000);
+        setMessage('Drive re-authorized! Token auto-refreshes every 50 min while you stay logged in.');
       } else {
         setMessage('Re-authorization failed: no token received. Please try again.');
       }
@@ -77,8 +95,8 @@ const AdminSetup = () => {
             color: tokenStatus === 'fresh' ? '#16a34a' : tokenStatus === 'checking' ? '#d97706' : '#dc2626'
           }}>
             {tokenStatus === 'checking' && 'Checking token…'}
-            {tokenStatus === 'fresh'    && 'Drive token is active — uploads will work.'}
-            {tokenStatus === 'expired'  && 'Drive token expired — uploads will fail until re-authorized.'}
+            {tokenStatus === 'fresh'    && `Drive token active — ${fmtExpiry(expiry)}`}
+            {tokenStatus === 'expired'  && 'Drive token expired — click Re-authorize below.'}
           </span>
         </div>
 
